@@ -1,0 +1,10 @@
+model LotteryRound {
+    id          String   @id @default(cuid())
+    pool        Pool     @relation(fields: [poolId], references: [id])
+    poolId      String
+    startTime   DateTime
+    endTime     DateTime
+    winnerId    String?
+    winner      User?    @relation(fields: [winnerId], references: [id])
+    entropyHash String?
+}

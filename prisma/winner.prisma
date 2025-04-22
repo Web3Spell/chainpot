@@ -1,0 +1,15 @@
+model Winner {
+    id        String   @id @default(cuid())
+    user      User     @relation(fields: [userId], references: [id])
+    userId    String
+    poolId    String
+    pool      Pool     @relation(fields: [poolId], references: [id])
+    amountWon Float
+    type      WinType // enum: auction or lottery
+    wonAt     DateTime @default(now())
+}
+
+enum WinType {
+    AUCTION
+    LOTTERY
+}

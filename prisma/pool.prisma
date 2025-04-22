@@ -1,0 +1,14 @@
+model Pool {
+    id            String         @id @default(cuid())
+    name          String
+    createdAt     DateTime       @default(now())
+    createdById   String
+    createdBy     User           @relation(fields: [createdById], references: [id])
+    inviteCode    InviteCode?    @relation(fields: [inviteCodeId], references: [id])
+    inviteCodeId  String?
+    members       PoolMember[]
+    auctions      AuctionRound[]
+    lotteries     LotteryRound[]
+    escrowBalance Float          @default(0.0)
+    Winner        Winner[]
+}

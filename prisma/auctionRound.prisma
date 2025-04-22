@@ -1,0 +1,10 @@
+model AuctionRound {
+    id        String   @id @default(cuid())
+    pool      Pool     @relation(fields: [poolId], references: [id])
+    poolId    String
+    startTime DateTime
+    endTime   DateTime
+    bids      Bid[]
+    winnerId  String?
+    winner    User?    @relation(fields: [winnerId], references: [id])
+}

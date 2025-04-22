@@ -1,0 +1,9 @@
+model InviteCode {
+    id        String    @id @default(cuid())
+    code      String    @unique
+    createdBy String
+    poolId    String?
+    expiresAt DateTime?
+    usedBy    User[]
+    Pool      Pool[]
+}

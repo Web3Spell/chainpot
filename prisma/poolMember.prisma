@@ -1,0 +1,9 @@
+model PoolMember {
+    id       String   @id @default(cuid())
+    pool     Pool     @relation(fields: [poolId], references: [id])
+    poolId   String
+    user     User     @relation(fields: [userId], references: [id])
+    userId   String
+    joinedAt DateTime @default(now())
+    hasBid   Boolean  @default(false)
+}
