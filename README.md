@@ -1,29 +1,100 @@
-# Create T3 App
+# Architecture
+![diagram-export-22-4-2025-10_52_12-pm](https://github.com/user-attachments/assets/6c9dd99d-9000-4910-9e2c-5576d935e0f1)
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+---
 
-## What's next? How do I make an app with this?
+A decentralized savings and rewards platform where users deposit funds, earn yield via Compound v3, and either win through auction or randomized lottery. Built with modular smart contracts and a modern web stack.
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+---
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
+## Features
 
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
+- Escrow-backed user deposits
+- Auction or lottery-based winner selection
+- Yield earning through Compound v3
+- Randomness via Pyth Entropy
+- Invite-only pools for access control
+- Clean frontend using TailwindCSS and Wagmi
 
-## Learn More
+---
 
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
+## Tech Stack
 
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
+| Feature          | Tool                          |
+|------------------|-------------------------------|
+| Smart Contracts  | Foundry                       |
+| Yield Earning    | Compound v3                   |
+| Randomness       | Pyth Entropy                  |
+| UI Framework     | TailwindCSS                   |
+| Backend          | Next.js + tRPC                |
+| Authentication   | NextAuth                      |
+| Database         | Prisma with PostgreSQL        |
+| Wallet Integration | Wagmi + RainbowKit         |
 
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
+---
 
-## How do I deploy this?
+## Architecture
 
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+### Pool Flow
+
+1. **Create Account**
+2. **Deposit Funds** → sent to Escrow Contract → Compound v3
+3. At cycle end:
+   - If bids exist → highest bidder wins (Auction Engine)
+   - If no bids → random winner via Pyth Entropy (Lottery Engine)
+4. Winner receives yield; protocol fee deducted
+5. Cycle resets
+
+### Smart Contract Modules
+
+| Module                 | Purpose                                       |
+|------------------------|-----------------------------------------------|
+| Escrow Contract        | Manages deposits, withdrawals, and payouts    |
+| Member Account Manager | Handles user accounts, invites, pool joins    |
+| Auction Engine         | Accepts bids and selects top bidder           |
+| Lottery Engine         | Picks random winner using Oracle              |
+| Compound Integrator    | Interfaces with Compound v3 for yield         |
+
+---
+
+## Prisma Schema
+
+```prisma
+model InviteCode {
+  id        String  @id @default(cuid())
+  code      String  @unique
+  createdBy String
+  poolId    String?
+  expiresAt DateTime?
+  usedBy    User[]
+}
+
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  pools      Pool[]
+  usedInvite InviteCode? @relation(fields: [inviteCodeId], references: [id])
+  inviteCodeId String?
+}
+```
+---
+
+## Setup
+
+```bash
+# Clone repository
+git clone 
+
+# Install dependencies
+pnpm install
+
+# Generate Prisma client
+npx prisma generate
+
+# Compile smart contracts
+forge build
+
+# Start development server
+pnpm dev
+```
+
