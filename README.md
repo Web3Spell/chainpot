@@ -32,8 +32,8 @@ A decentralized savings and rewards platform where users deposit funds, earn yie
 | Randomness       | Pyth Entropy                  |
 | UI Framework     | TailwindCSS                   |
 | Backend          | Next.js + tRPC                |
-| Authentication   | NextAuth                      |
-| Database         | Prisma with PostgreSQL        |
+| Authentication   | NextAuth / Reclaim Protocol   |
+| Database         | Prisma with PostgreSQL / GraphQL    |
 | Wallet Integration | Wagmi + RainbowKit         |
 
 ---
@@ -62,7 +62,7 @@ A decentralized savings and rewards platform where users deposit funds, earn yie
 
 ---
 
-## Prisma Schema
+## Prisma Schema (Example)
 
 ```prisma
 model InviteCode {
