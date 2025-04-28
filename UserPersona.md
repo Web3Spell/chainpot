@@ -32,3 +32,14 @@ Governance | ❌ (optional) | ✅ (important) | ✅ (critical) | ✅ (optional) 
 |Jake | International Chit | Member Manager, Auction Engine, Security Manager, Compound, Deadline, Governance | 
 |Ghost | Private Pool | Member Manager, (optional Auction or Lottery), Deadline, Security Manager | Governance (optional)|
 |Sophia | Business Saving | Member Manager, Auction Engine, Compound, Security Manager, Deadline, Governance | 
+
+---
+## Bonus Scenarios
+
+Scenario | Story
+|-|-|
+Family Saving Plan | Parents create a family chit fund to save for weddings or education.
+College Student Group | 10 students run a kitty party to save monthly pocket money for trips.
+Startup Founders | Startup founders form a chit fund to finance sudden operational costs.
+Women Self-Help Group (SHG) | Village women manage savings using your platform without banks.
+Crypto Communities | Crypto investors use your International Pool to save and invest together securely.
