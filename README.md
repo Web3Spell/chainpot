@@ -2,6 +2,9 @@
 ![diagram-export-22-4-2025-10_52_12-pm](https://github.com/user-attachments/assets/6c9dd99d-9000-4910-9e2c-5576d935e0f1)
 
 ---
+# [User Persona](UserPersona.md)
+
+---
 # High Level Design
 
 ![image](https://github.com/user-attachments/assets/97f7938a-158b-4a2a-89b6-f832e93c1eb0)
@@ -102,4 +105,4 @@ forge build
 # Start development server
 pnpm dev
 ```
-
+# [FAQ](FAQ.md)
