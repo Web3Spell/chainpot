@@ -15,7 +15,7 @@
 - Chit funds are regulated under the Chit Funds Act, 1982 in India (for formal chit funds). However, many informal, unregistered chit groups also exist.
 
 ---
-### Kitty Party
+### What is Kitty Party
 #### Defnition:
 - A kitty party is mainly a social gathering (popular among women) where each member contributes a certain amount of money (the "kitty") during the gathering, and one member gets the entire kitty amount each month — usually decided by draw.
 
