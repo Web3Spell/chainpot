@@ -79,7 +79,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     constructor(
         address _memberManager,
         address _lotteryEngine,
-        address _escrow
+        address payable _escrow
     ) Ownable(msg.sender) {
         require(_memberManager != address(0), "Invalid member manager");
         require(_lotteryEngine != address(0), "Invalid lottery engine");
