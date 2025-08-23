@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /// @title CompoundV3Integrator
 /// @notice Real integration with Compound V3 (Comet) for yield generation
@@ -60,7 +61,17 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard {
     
     mapping(address => uint256) public userSupplies;
     mapping(uint256 => uint256) public potSupplies; // potId => amount supplied
+
+    //PriceFeed Variables
+    AggregatorV3Interface private immutable ethUsdFeed;
+    AggregatorV3Interface private immutable usdcUsdFeed;
     
+    uint256 public constant PRICE_DECIMALS = 6; // USDC decimals
+    uint256 public constant MAX_STALENESS = 3600; // 1 hour
+    uint256 public constant MIN_PRICE = 100 * 1e6; // $100 minimum
+    uint256 public constant MAX_PRICE = 20000 * 1e6; // $20,000 maximum
+
+
     // Events
     event SuppliedToCompound(uint256 amount, uint256 timestamp);
     event WithdrawnFromCompound(uint256 amount, address recipient, uint256 timestamp);
@@ -68,12 +79,20 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard {
     event AuctionEngineUpdated(address indexed newEngine);
     event EscrowUpdated(address indexed newEscrow);
     event EmergencyWithdrawal(uint256 amount, address recipient);
-    
-    constructor() Ownable(msg.sender) {
+    event PriceRetrieved(uint256 ethPriceInUsdc);
+
+ // Errors
+    error StalePriceData();
+    error InvalidPriceData();
+    error PriceOutOfBounds();
+
+    constructor(address _ethUsdFeed, address _usdcUsdFeed) Ownable(msg.sender) {
         comet = IComet(COMET_USDC_BASE_SEPOLIA);
         usdc = IERC20(USDC_BASE_SEPOLIA);
         lastUpdateTime = block.timestamp;
-        
+        ethUsdFeed = AggregatorV3Interface(_ethUsdFeed);
+        usdcUsdFeed = AggregatorV3Interface(_usdcUsdFeed);
+
         // Approve Comet to spend USDC
         usdc.safeApprove(COMET_USDC_BASE_SEPOLIA, type(uint256).max);
     }
@@ -211,25 +230,78 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard {
     
     // -------------------- Simulation Functions (Replace with real DEX integration) --------------------
     
-    /// @notice Simulate ETH to USDC conversion (replace with real DEX integration)
-    /// @dev In production, use Uniswap V3, 1inch, or similar DEX
+    /// @notice Simulate ETH to USDC conversion (replacing with real DEX integration in next phase)
     function _simulateETHToUSDC(uint256 ethAmount) internal pure returns (uint256) {
         // Simulated rate: 1 ETH = 2500 USDC
         // In production, get real-time price from Chainlink or DEX
         return (ethAmount * 2500) / 1e18 * 1e6; // Convert to 6 decimal USDC
     }
     
-    /// @notice Simulate USDC to ETH conversion (replace with real DEX integration)
-    function _simulateUSDCToETH(uint256 usdcAmount) internal pure returns (uint256) {
-        // Simulated rate: 1 USDC = 0.0004 ETH
-        return (usdcAmount * 1e18) / (2500 * 1e6); // Convert to 18 decimal ETH
+ /// @notice Simulate USDC to ETH conversion using live price data
+    /// @param usdcAmount Amount of USDC to convert (6 decimals)
+    /// @return ethAmount Equivalent ETH amount (18 decimals)
+    function _simulateUSDCToETH(uint256 usdcAmount) internal view returns (uint256 ethAmount) {
+        // Get current ETH price in USDC
+        uint256 ethPriceInUsdc = _getETHPriceInUSDCInternal();
+        
+        // Convert USDC to ETH: ethAmount = usdcAmount / ethPrice
+        // usdcAmount (6 decimals) * 1e18 / ethPriceInUsdc (6 decimals) = ETH (18 decimals)
+        ethAmount = (usdcAmount * 1e18) / ethPriceInUsdc;
+        
+        return ethAmount;
     }
     
-    /// @notice Get ETH price in USDC (replace with Chainlink oracle)
-    function getETHPriceInUSDC() external pure returns (uint256) {
-        return 2500 * 1e6; // Simulated: $2500 USDC per ETH
+    /// @notice Internal function to get ETH price without events
+    function _getETHPriceInUSDCInternal() internal view returns (uint256) {
+        (, int256 ethPrice, , uint256 ethUpdatedAt, ) = ethUsdFeed.latestRoundData();
+        if (ethPrice <= 0) revert InvalidPriceData();
+        if (block.timestamp - ethUpdatedAt > MAX_STALENESS) revert StalePriceData();
+        
+        (, int256 usdcPrice, , uint256 usdcUpdatedAt, ) = usdcUsdFeed.latestRoundData();
+        if (usdcPrice <= 0) revert InvalidPriceData();
+        if (block.timestamp - usdcUpdatedAt > MAX_STALENESS) revert StalePriceData();
+        
+        uint8 ethDecimals = ethUsdFeed.decimals();
+        uint8 usdcDecimals = usdcUsdFeed.decimals();
+        
+        uint256 ethPriceInUsdc = (uint256(ethPrice) * (10 ** PRICE_DECIMALS) * (10 ** usdcDecimals)) / 
+                                (uint256(usdcPrice) * (10 ** ethDecimals));
+        
+        if (ethPriceInUsdc < MIN_PRICE || ethPriceInUsdc > MAX_PRICE) {
+            revert PriceOutOfBounds();
+        }
+        
+        return ethPriceInUsdc;
     }
-    
+}
+    /// @notice Get ETH price in USDC
+    /// @return ethPriceInUsdc ETH price with 6 decimals
+    function getETHPriceInUSDC() external returns (uint256 ethPriceInUsdc) {
+        // Get ETH/USD price
+        (, int256 ethPrice, , uint256 ethUpdatedAt, ) = ethUsdFeed.latestRoundData();
+        if (ethPrice <= 0) revert InvalidPriceData();
+        if (block.timestamp - ethUpdatedAt > MAX_STALENESS) revert StalePriceData();
+        
+        // Get USDC/USD price  
+        (, int256 usdcPrice, , uint256 usdcUpdatedAt, ) = usdcUsdFeed.latestRoundData();
+        if (usdcPrice <= 0) revert InvalidPriceData();
+        if (block.timestamp - usdcUpdatedAt > MAX_STALENESS) revert StalePriceData();
+        
+        // Calculate ETH/USDC = (ETH/USD) / (USDC/USD)
+        uint8 ethDecimals = ethUsdFeed.decimals();
+        uint8 usdcDecimals = usdcUsdFeed.decimals();
+        
+        ethPriceInUsdc = (uint256(ethPrice) * (10 ** PRICE_DECIMALS) * (10 ** usdcDecimals)) / 
+                        (uint256(usdcPrice) * (10 ** ethDecimals));
+        
+        // Sanity check
+        if (ethPriceInUsdc < MIN_PRICE || ethPriceInUsdc > MAX_PRICE) {
+            revert PriceOutOfBounds();
+        }
+        
+        emit PriceRetrieved(ethPriceInUsdc);
+        return ethPriceInUsdc;
+    }
     // -------------------- View Functions --------------------
     
     /// @notice Get current balance in Compound (USDC balance converted to ETH equivalent)
@@ -553,4 +625,5 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard {
     fallback() external payable {
         revert("Function not found");
     }
+
 }
