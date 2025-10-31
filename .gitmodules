@@ -1,0 +1,9 @@
+[submodule "smart-contract/lib/openzeppelin-contracts"]
+	path = smart-contract/lib/openzeppelin-contracts
+	url = https://github.com/openzeppelin/openzeppelin-contracts
+[submodule "smart-contract/lib/pyth-crosschain"]
+	path = smart-contract/lib/pyth-crosschain
+	url = https://github.com/pyth-network/pyth-crosschain
+[submodule "smart-contract/lib/chainlink-brownie-contracts"]
+	path = smart-contract/lib/chainlink-brownie-contracts
+	url = https://github.com/smartcontractkit/chainlink-brownie-contracts
