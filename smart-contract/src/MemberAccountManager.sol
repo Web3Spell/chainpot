@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 /// @title MemberAccountManager
 /// @notice Tracks user activity: pots, cycles, bids, and performance in ChainPot
@@ -44,6 +44,20 @@ contract MemberAccountManager is Ownable {
     EnumerableSet.AddressSet private registeredMembers;
     mapping(address => bool) public authorizedCallers;
 
+    // ===== Custom Errors =====
+    error UserNotRegistered(address user);
+    error NotAuthorized(address caller);
+    error InvalidAddress();
+    error AlreadyRegistered(address user);
+    error InvalidPotId(uint256 potId);
+    error InvalidCycleId(uint256 cycleId);
+    error InvalidContribution(uint256 contribution);
+    error InvalidAmount(uint256 amount);
+    error PotNotFound(uint256 potId);
+    error CycleNotFound(uint256 cycleId);
+    error AlreadyMarkedWinner(uint256 potId, uint256 cycleId);
+    error IndexOutOfBounds(uint256 index);
+
     /// === Events ===
 
     event MemberRegistered(address indexed user);
@@ -61,19 +75,19 @@ contract MemberAccountManager is Ownable {
     /// === Modifiers ===
 
     modifier onlyRegistered(address user) {
-        require(memberProfiles[user].registered, "User not registered");
+        if (!memberProfiles[user].registered) revert UserNotRegistered(user);
         _;
     }
 
     modifier onlyAuthorized() {
-        require(authorizedCallers[msg.sender] || msg.sender == owner(), "Not authorized");
+        if (!authorizedCallers[msg.sender] && msg.sender != owner()) revert NotAuthorized(msg.sender);
         _;
     }
 
     /// === Authorization Management ===
 
     function addAuthorizedCaller(address caller) external onlyOwner {
-        require(caller != address(0), "Invalid address");
+        if (caller == address(0)) revert InvalidAddress();
         authorizedCallers[caller] = true;
         emit AuthorizedCallerAdded(caller);
     }
@@ -86,8 +100,8 @@ contract MemberAccountManager is Ownable {
     /// === Registration ===
 
     function registerMember(address user) external {
-        require(user != address(0), "Invalid address");
-        require(!memberProfiles[user].registered, "Already registered");
+        if (user == address(0)) revert InvalidAddress();
+        if (memberProfiles[user].registered) revert AlreadyRegistered(user);
 
         MemberProfile storage profile = memberProfiles[user];
         profile.registered = true;
@@ -101,16 +115,14 @@ contract MemberAccountManager is Ownable {
 
     /// === Core Functionalities ===
 
-    function updateParticipation(
-        address user,
-        uint256 potId,
-        uint256 cycleId,
-        uint256 contribution,
-        bool isCreator
-    ) external onlyAuthorized onlyRegistered(user) {
-        require(potId > 0, "Invalid pot ID");
-        require(cycleId > 0, "Invalid cycle ID");
-        require(contribution > 0, "Invalid contribution");
+    function updateParticipation(address user, uint256 potId, uint256 cycleId, uint256 contribution, bool isCreator)
+        external
+        onlyAuthorized
+        onlyRegistered(user)
+    {
+        if (potId == 0) revert InvalidPotId(potId);
+        if (cycleId == 0) revert InvalidCycleId(cycleId);
+        if (contribution == 0) revert InvalidContribution(contribution);
 
         MemberProfile storage profile = memberProfiles[user];
         PotData storage pot = profile.pots[potId];
@@ -119,7 +131,7 @@ contract MemberAccountManager is Ownable {
         if (pot.potId == 0) {
             pot.potId = potId;
             pot.isCreator = isCreator;
-            
+
             if (isCreator) {
                 profile.createdPots.push(potId);
             } else {
@@ -141,13 +153,8 @@ contract MemberAccountManager is Ownable {
             profile.totalCyclesParticipated += 1;
         }
 
-        pot.cycleParticipation[cycleId] = CycleParticipation({
-            cycleId: cycleId,
-            contribution: contribution,
-            bidAmount: 0,
-            didBid: false,
-            won: false
-        });
+        pot.cycleParticipation[cycleId] =
+            CycleParticipation({cycleId: cycleId, contribution: contribution, bidAmount: 0, didBid: false, won: false});
 
         profile.totalContribution += contribution;
         profile.reputationScore += 2;
@@ -156,43 +163,39 @@ contract MemberAccountManager is Ownable {
         emit ParticipationUpdated(user, potId, cycleId);
     }
 
-    function updatePotFundingDetails(
-        address user,
-        uint256 potId,
-        uint256 cycleId,
-        uint256 amount
-    ) external onlyAuthorized onlyRegistered(user) {
-        require(amount > 0, "Invalid amount");
-        
+    function updatePotFundingDetails(address user, uint256 potId, uint256 cycleId, uint256 amount)
+        external
+        onlyAuthorized
+        onlyRegistered(user)
+    {
+        if (amount == 0) revert InvalidAmount(amount);
+
         PotData storage pot = memberProfiles[user].pots[potId];
-        require(pot.potId != 0, "Pot not found");
-        
+        if (pot.potId == 0) revert PotNotFound(potId);
+
         CycleParticipation storage participation = pot.cycleParticipation[cycleId];
-        require(participation.cycleId != 0, "Cycle not found");
-        
+        if (participation.cycleId == 0) revert CycleNotFound(cycleId);
+
         uint256 oldContribution = participation.contribution;
         participation.contribution = amount;
-        
+
         // Update total contribution
-        memberProfiles[user].totalContribution = 
-            memberProfiles[user].totalContribution - oldContribution + amount;
+        memberProfiles[user].totalContribution = memberProfiles[user].totalContribution - oldContribution + amount;
 
         emit PotFundingUpdated(user, potId, cycleId, amount);
     }
 
-    function updateBidInfo(
-        address user,
-        uint256 potId,
-        uint256 cycleId,
-        uint256 bidAmount,
-        bool didBid
-    ) external onlyAuthorized onlyRegistered(user) {
+    function updateBidInfo(address user, uint256 potId, uint256 cycleId, uint256 bidAmount, bool didBid)
+        external
+        onlyAuthorized
+        onlyRegistered(user)
+    {
         PotData storage pot = memberProfiles[user].pots[potId];
-        require(pot.potId != 0, "Pot not found");
-        
+        if (pot.potId == 0) revert PotNotFound(potId);
+
         CycleParticipation storage participation = pot.cycleParticipation[cycleId];
-        require(participation.cycleId != 0, "Cycle not found");
-        
+        if (participation.cycleId == 0) revert CycleNotFound(cycleId);
+
         participation.bidAmount = bidAmount;
         participation.didBid = didBid;
 
@@ -203,18 +206,14 @@ contract MemberAccountManager is Ownable {
         emit BidUpdated(user, potId, cycleId, bidAmount, didBid);
     }
 
-    function markAsWinner(
-        address user,
-        uint256 potId,
-        uint256 cycleId
-    ) external onlyAuthorized onlyRegistered(user) {
+    function markAsWinner(address user, uint256 potId, uint256 cycleId) external onlyAuthorized onlyRegistered(user) {
         PotData storage pot = memberProfiles[user].pots[potId];
-        require(pot.potId != 0, "Pot not found");
-        
+        if (pot.potId == 0) revert PotNotFound(potId);
+
         CycleParticipation storage participation = pot.cycleParticipation[cycleId];
-        require(participation.cycleId != 0, "Cycle not found");
-        require(!participation.won, "Already marked as winner");
-        
+        if (participation.cycleId == 0) revert CycleNotFound(cycleId);
+        if (participation.won) revert AlreadyMarkedWinner(potId, cycleId);
+
         participation.won = true;
         memberProfiles[user].totalCyclesWon += 1;
         memberProfiles[user].reputationScore += 10; // Bonus for winning
@@ -260,7 +259,7 @@ contract MemberAccountManager is Ownable {
     }
 
     function getMemberByIndex(uint256 index) external view returns (address) {
-        require(index < registeredMembers.length(), "Index out of bounds");
+        if (index >= registeredMembers.length()) revert IndexOutOfBounds(index);
         return registeredMembers.at(index);
     }
 
@@ -272,11 +271,7 @@ contract MemberAccountManager is Ownable {
         return memberProfiles[user].pots[potId].cycleParticipation[cycleId];
     }
 
-    function getPotCycles(address user, uint256 potId)
-        external
-        view
-        returns (uint256[] memory)
-    {
+    function getPotCycles(address user, uint256 potId) external view returns (uint256[] memory) {
         return memberProfiles[user].pots[potId].cycleIds;
     }
 

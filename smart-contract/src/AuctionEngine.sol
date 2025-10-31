@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "./MemberAccountManager.sol";
-import "./LotteryEngine.sol";
-import "./Escrow.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {MemberAccountManager} from "./MemberAccountManager.sol";
+import {LotteryEngine} from "./LotteryEngine.sol";
+import {Escrow} from "./Escrow.sol";
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 contract AuctionEngine is Ownable, ReentrancyGuard {
     using EnumerableSet for EnumerableSet.AddressSet;
@@ -15,9 +15,22 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     LotteryEngine public lotteryEngine;
     Escrow public escrow;
 
-    enum CycleFrequency { Monthly, BiWeekly, Weekly }
-    enum PotStatus { Active, Paused, Completed }
-    enum CycleStatus { Pending, Active, BiddingClosed, Completed }
+    enum CycleFrequency {
+        Monthly,
+        BiWeekly,
+        Weekly
+    }
+    enum PotStatus {
+        Active,
+        Paused,
+        Completed
+    }
+    enum CycleStatus {
+        Pending,
+        Active,
+        BiddingClosed,
+        Completed
+    }
 
     struct Pot {
         string name;
@@ -65,6 +78,46 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     uint256 public constant MIN_BID_DEADLINE = 1 hours;
     uint256 public constant MAX_MEMBERS = 100;
 
+    //Custom Errors
+    error NotRegistered();
+    error NotPotCreator();
+    error InvalidPot();
+    error InvalidCycle();
+    error PotNotActive();
+    error AlreadyJoined();
+    error PotFull();
+    error PotAlreadyStarted();
+    error NotAMember();
+    error CreatorCannotLeave();
+    error InvalidCycleDuration();
+    error InvalidBidDeadline();
+    error InvalidCycleCount();
+    error InvalidMemberLimits();
+    error TooManyMembers();
+    error EmptyName();
+    error InvalidAmount();
+    error NotEnoughMembers();
+    error AllCyclesCompleted();
+    error InsufficientBalance();
+    error CycleNotActive();
+    error BidDeadlinePassed();
+    error InvalidBidAmount();
+    error IncorrectPayment();
+    error TooEarlyToClose();
+    error BiddingNotClosed();
+    error WinnerNotDeclared();
+    error AlreadyCompleted();
+    error CycleNotEnded();
+    error FundsAlreadyReleased();
+    error InsufficientContractBalance();
+    error InvalidMemberManager();
+    error InvalidLotteryEngine();
+    error InvalidEscrow();
+    error PotDoesNotExist();
+    error PotIsFull();
+    error CannotLeaveAfterStarted();
+    error NotAPotMember();
+
     // -------------------- Events --------------------
     event PotCreated(uint256 indexed potId, string name, address indexed creator, uint256 amountPerCycle);
     event JoinedPot(uint256 indexed potId, address indexed user);
@@ -76,39 +129,40 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     event RefundIssued(address indexed user, uint256 amount);
     event PotStatusChanged(uint256 indexed potId, PotStatus status);
 
-    constructor(
-        address _memberManager,
-        address _lotteryEngine,
-        address payable _escrow
-    ) Ownable(msg.sender) {
-        require(_memberManager != address(0), "Invalid member manager");
-        require(_lotteryEngine != address(0), "Invalid lottery engine");
-        require(_escrow != address(0), "Invalid escrow");
+    constructor(address _memberManager, address _lotteryEngine, address payable _escrow) Ownable(msg.sender) {
+        if (_memberManager == address(0)) revert InvalidMemberManager();
+        if (_lotteryEngine == address(0)) revert InvalidLotteryEngine();
+        if (_escrow == address(0)) revert InvalidEscrow();
 
         memberManager = MemberAccountManager(_memberManager);
-        lotteryEngine = LotteryEngine(_lotteryEngine);
+        lotteryEngine = LotteryEngine(payable(_lotteryEngine));
         escrow = Escrow(_escrow);
     }
 
     modifier onlyRegistered() {
-        require(memberManager.isRegistered(msg.sender), "Not registered");
+        if (!memberManager.isRegistered(msg.sender)) revert NotRegistered();
+
         _;
     }
 
     modifier onlyPotCreator(uint256 potId) {
-        require(chainPots[potId].creator == msg.sender, "Not pot creator");
+        if (chainPots[potId].creator != msg.sender) revert NotPotCreator();
         _;
     }
 
     modifier validPot(uint256 potId) {
-        require(potId > 0 && potId < potCounter, "Invalid pot ID");
-        require(chainPots[potId].creator != address(0), "Pot does not exist");
+        if (potId <= 0 || potId >= potCounter) revert InvalidPot();
+        if (chainPots[potId].creator == address(0)) revert PotDoesNotExist();
         _;
     }
 
     modifier validCycle(uint256 cycleId) {
-        require(cycleId > 0 && cycleId < cycleCounter, "Invalid cycle ID");
+        _validCycle(cycleId);
         _;
+    }
+
+    function _validCycle(uint256 cycleId) internal view {
+        if (cycleId <= 0 || cycleId >= cycleCounter) revert InvalidCycle();
     }
 
     // -------------------- Core Logic --------------------
@@ -123,13 +177,13 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         uint256 minMembers,
         uint256 maxMembers
     ) external onlyRegistered returns (uint256) {
-        require(bytes(name).length > 0, "Name cannot be empty");
-        require(amountPerCycle > 0, "Amount must be > 0");
-        require(cycleDuration >= MIN_CYCLE_DURATION && cycleDuration <= MAX_CYCLE_DURATION, "Invalid cycle duration");
-        require(bidDepositDeadline >= MIN_BID_DEADLINE && bidDepositDeadline < cycleDuration, "Invalid bid deadline");
-        require(cycleCount > 0 && cycleCount <= 100, "Invalid cycle count");
-        require(minMembers >= 2 && minMembers <= maxMembers, "Invalid member limits");
-        require(maxMembers <= MAX_MEMBERS, "Too many members");
+        if (bytes(name).length == 0) revert EmptyName();
+        if (amountPerCycle <= 0) revert InvalidAmount();
+        if (cycleDuration < MIN_CYCLE_DURATION || cycleDuration > MAX_CYCLE_DURATION) revert InvalidCycleDuration();
+        if (bidDepositDeadline < MIN_BID_DEADLINE || bidDepositDeadline >= cycleDuration) revert InvalidBidDeadline();
+        if (cycleCount <= 0 || cycleCount > 100) revert InvalidCycleCount();
+        if (minMembers < 2 || minMembers > maxMembers) revert InvalidMemberLimits();
+        if (maxMembers > MAX_MEMBERS) revert TooManyMembers();
 
         uint256 potId = potCounter++;
 
@@ -161,10 +215,10 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
 
     function joinPot(uint256 potId) external onlyRegistered validPot(potId) nonReentrant {
         Pot storage pot = chainPots[potId];
-        require(pot.status == PotStatus.Active, "Pot not active");
-        require(!hasJoinedPot[potId][msg.sender], "Already joined");
-        require(pot.members.length < pot.maxMembers, "Pot is full");
-        require(pot.completedCycles == 0, "Pot already started");
+        if (pot.status != PotStatus.Active) revert PotNotActive();
+        if (hasJoinedPot[potId][msg.sender]) revert AlreadyJoined();
+        if (pot.members.length >= pot.maxMembers) revert PotIsFull();
+        if (pot.completedCycles > 0) revert PotAlreadyStarted();
 
         pot.members.push(msg.sender);
         hasJoinedPot[potId][msg.sender] = true;
@@ -175,9 +229,9 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
 
     function leavePot(uint256 potId) external validPot(potId) nonReentrant {
         Pot storage pot = chainPots[potId];
-        require(hasJoinedPot[potId][msg.sender], "Not a member");
-        require(pot.completedCycles == 0, "Cannot leave after pot started");
-        require(msg.sender != pot.creator, "Creator cannot leave");
+        if (!hasJoinedPot[potId][msg.sender]) revert NotAMember();
+        if (pot.completedCycles > 0) revert CannotLeaveAfterStarted();
+        if (msg.sender == pot.creator) revert CreatorCannotLeave();
 
         // Remove from members array
         for (uint256 i = 0; i < pot.members.length; i++) {
@@ -205,9 +259,9 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
 
     function startCycle(uint256 potId) external onlyPotCreator(potId) validPot(potId) nonReentrant {
         Pot storage pot = chainPots[potId];
-        require(pot.status == PotStatus.Active, "Pot not active");
-        require(pot.members.length >= pot.minMembers, "Not enough members");
-        require(pot.completedCycles < pot.cycleCount, "All cycles completed");
+        if (pot.status != PotStatus.Active) revert PotNotActive();
+        if (pot.members.length < pot.minMembers) revert NotEnoughMembers();
+        if (pot.completedCycles >= pot.cycleCount) revert AllCyclesCompleted();
 
         uint256 cycleId = cycleCounter++;
 
@@ -223,16 +277,10 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         // Collect deposits from all members
         for (uint256 i = 0; i < pot.members.length; i++) {
             address member = pot.members[i];
-            require(member.balance >= pot.amountPerCycle, "Insufficient balance");
-            
+            if (member.balance < pot.amountPerCycle) revert InsufficientBalance();
+
             // Update member participation
-            memberManager.updateParticipation(
-                member,
-                potId,
-                cycleId,
-                pot.amountPerCycle,
-                member == pot.creator
-            );
+            memberManager.updateParticipation(member, potId, cycleId, pot.amountPerCycle, member == pot.creator);
         }
 
         cycle.totalDeposited = pot.amountPerCycle * pot.members.length;
@@ -240,21 +288,21 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         emit CycleStarted(cycleId, potId, cycle.startTime, cycle.endTime);
     }
 
-    function placeBid(uint256 cycleId, uint256 bidAmount) 
-        external 
-        payable 
-        onlyRegistered 
-        validCycle(cycleId) 
-        nonReentrant 
+    function placeBid(uint256 cycleId, uint256 bidAmount)
+        external
+        payable
+        onlyRegistered
+        validCycle(cycleId)
+        nonReentrant
     {
         AuctionCycle storage cycle = auctionCycles[cycleId];
         Pot storage pot = chainPots[cycle.potId];
 
-        require(cycle.status == CycleStatus.Active, "Cycle not active");
-        require(hasJoinedPot[cycle.potId][msg.sender], "Not a pot member");
-        require(block.timestamp < cycle.endTime - pot.bidDepositDeadline, "Bid deadline passed");
-        require(bidAmount > 0 && bidAmount <= pot.amountPerCycle, "Invalid bid amount");
-        require(msg.value == bidAmount, "Incorrect payment");
+        if (cycle.status != CycleStatus.Active) revert CycleNotActive();
+        if (!hasJoinedPot[cycle.potId][msg.sender]) revert NotAPotMember();
+        if (block.timestamp >= cycle.endTime - pot.bidDepositDeadline) revert BidDeadlinePassed();
+        if (bidAmount <= 0 || bidAmount > pot.amountPerCycle) revert InvalidBidAmount();
+        if (msg.value != bidAmount) revert IncorrectPayment();
 
         // Store bid (overwrite if user bids again)
         cycle.bids[msg.sender] = bidAmount;
@@ -266,31 +314,23 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         emit BidPlaced(cycleId, msg.sender, bidAmount);
     }
 
-    function closeBidding(uint256 cycleId) 
-        external 
-        onlyPotCreator(auctionCycles[cycleId].potId) 
-        validCycle(cycleId) 
-    {
+    function closeBidding(uint256 cycleId) external onlyPotCreator(auctionCycles[cycleId].potId) validCycle(cycleId) {
         AuctionCycle storage cycle = auctionCycles[cycleId];
-        require(cycle.status == CycleStatus.Active, "Cycle not active");
-        require(block.timestamp >= cycle.endTime - chainPots[cycle.potId].bidDepositDeadline, "Too early to close");
+        if (cycle.status != CycleStatus.Active) revert CycleNotActive();
+        if (block.timestamp < cycle.endTime - chainPots[cycle.potId].bidDepositDeadline) revert TooEarlyToClose();
 
         cycle.status = CycleStatus.BiddingClosed;
     }
 
-    function declareWinner(uint256 cycleId) 
-        external 
-        onlyPotCreator(auctionCycles[cycleId].potId) 
-        validCycle(cycleId) 
-    {
+    function declareWinner(uint256 cycleId) external onlyPotCreator(auctionCycles[cycleId].potId) validCycle(cycleId) {
         AuctionCycle storage cycle = auctionCycles[cycleId];
-        require(cycle.status == CycleStatus.BiddingClosed, "Bidding not closed");
+        if (cycle.status != CycleStatus.BiddingClosed) revert BiddingNotClosed();
 
         Pot storage pot = chainPots[cycle.potId];
-        
+
         if (cycle.participants.length() == 0) {
             // No bids - use lottery
-            cycle.winner = lotteryEngine.selectRandomWinner(pot.members);
+            cycle.winner = lotteryEngine.previewRandomWinner(pot.members);
             cycle.winningBid = pot.amountPerCycle;
         } else {
             // Find lowest bidder
@@ -300,7 +340,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
             for (uint256 i = 0; i < cycle.participants.length(); i++) {
                 address participant = cycle.participants.at(i);
                 uint256 bid = cycle.bids[participant];
-                
+
                 if (bid < lowestBid) {
                     lowestBid = bid;
                     lowestBidder = participant;
@@ -317,17 +357,17 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         emit WinnerDeclared(cycleId, cycle.winner, cycle.winningBid);
     }
 
-    function completeCycle(uint256 cycleId) 
-        external 
-        onlyPotCreator(auctionCycles[cycleId].potId) 
-        validCycle(cycleId) 
-        nonReentrant 
+    function completeCycle(uint256 cycleId)
+        external
+        onlyPotCreator(auctionCycles[cycleId].potId)
+        validCycle(cycleId)
+        nonReentrant
     {
         AuctionCycle storage cycle = auctionCycles[cycleId];
-        require(cycle.winner != address(0), "Winner not declared");
-        require(cycle.status != CycleStatus.Completed, "Already completed");
-        require(block.timestamp >= cycle.endTime, "Cycle not ended");
-        require(!cycle.fundsReleased, "Funds already released");
+        if (cycle.winner == address(0)) revert WinnerNotDeclared();
+        if (cycle.status == CycleStatus.Completed) revert AlreadyCompleted();
+        if (block.timestamp < cycle.endTime) revert CycleNotEnded();
+        if (cycle.fundsReleased) revert FundsAlreadyReleased();
 
         Pot storage pot = chainPots[cycle.potId];
         uint256 totalFund = cycle.totalDeposited;
@@ -339,7 +379,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         uint256 interest = totalFund - cycle.winningBid;
         if (interest > 0 && pot.members.length > 1) {
             uint256 sharePerMember = interest / (pot.members.length - 1);
-            
+
             for (uint256 i = 0; i < pot.members.length; i++) {
                 address member = pot.members[i];
                 if (member != cycle.winner && sharePerMember > 0) {
@@ -376,10 +416,10 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
 
     // -------------------- View Functions --------------------
 
-    function getCycleInfo(uint256 cycleId) 
-        external 
-        view 
-        validCycle(cycleId) 
+    function getCycleInfo(uint256 cycleId)
+        external
+        view
+        validCycle(cycleId)
         returns (
             uint256 potId,
             uint256 startTime,
@@ -389,7 +429,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
             CycleStatus status,
             uint256 participantCount,
             uint256 totalDeposited
-        ) 
+        )
     {
         AuctionCycle storage cycle = auctionCycles[cycleId];
         return (
@@ -404,10 +444,10 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         );
     }
 
-    function getPotInfo(uint256 potId) 
-        external 
-        view 
-        validPot(potId) 
+    function getPotInfo(uint256 potId)
+        external
+        view
+        validPot(potId)
         returns (
             string memory name,
             address creator,
@@ -420,7 +460,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
             PotStatus status,
             address[] memory members,
             uint256[] memory cycleIds
-        ) 
+        )
     {
         Pot storage pot = chainPots[potId];
         return (
@@ -438,12 +478,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         );
     }
 
-    function getUserBid(uint256 cycleId, address user) 
-        external 
-        view 
-        validCycle(cycleId) 
-        returns (uint256) 
-    {
+    function getUserBid(uint256 cycleId, address user) external view validCycle(cycleId) returns (uint256) {
         return auctionCycles[cycleId].bids[user];
     }
 
@@ -470,7 +505,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     // -------------------- Emergency Functions --------------------
 
     function emergencyWithdraw(uint256 amount) external onlyOwner {
-        require(address(this).balance >= amount, "Insufficient balance");
+        if (address(this).balance < amount) revert InsufficientBalance();
         payable(owner()).transfer(amount);
     }
 
