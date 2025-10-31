@@ -1,0 +1,20 @@
+{
+  "name": "smart-contract",
+  "version": "1.0.0",
+  "description": "![License](https://img.shields.io/badge/license-MIT-blue.svg) ![Solidity](https://img.shields.io/badge/solidity-^0.8.20-363636) ![Base](https://img.shields.io/badge/network-Base%20Sepolia-0052FF)",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@pythnetwork/entropy-sdk-solidity": "^2.1.0"
+  }
+}
