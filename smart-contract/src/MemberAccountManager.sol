@@ -8,6 +8,7 @@ import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet
 /// @notice Tracks user activity: pots, cycles, bids, and performance in ChainPot
 contract MemberAccountManager is Ownable {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using EnumerableSet for EnumerableSet.UintSet;
 
     /// === Structs ===
 
@@ -17,12 +18,13 @@ contract MemberAccountManager is Ownable {
         uint256 bidAmount;
         bool didBid;
         bool won;
+        uint256 timestamp;
     }
 
     struct PotData {
         uint256 potId;
         bool isCreator;
-        uint256[] cycleIds;
+        EnumerableSet.UintSet cycleIds; // Use EnumerableSet for gas optimization
         mapping(uint256 => CycleParticipation) cycleParticipation; // cycleId => info
     }
 
@@ -32,9 +34,10 @@ contract MemberAccountManager is Ownable {
         uint256 totalCyclesWon;
         uint256 totalContribution;
         uint256 reputationScore;
-        uint256 lastJoinedTimestamp;
-        uint256[] createdPots;
-        uint256[] joinedPots;
+        uint256 registrationTimestamp;
+        uint256 lastActivityTimestamp;
+        EnumerableSet.UintSet createdPots; // Gas-optimized
+        EnumerableSet.UintSet joinedPots; // Gas-optimized
         mapping(uint256 => PotData) pots; // potId => pot details
     }
 
@@ -43,6 +46,12 @@ contract MemberAccountManager is Ownable {
     mapping(address => MemberProfile) private memberProfiles;
     EnumerableSet.AddressSet private registeredMembers;
     mapping(address => bool) public authorizedCallers;
+
+    // Constants
+    uint256 public constant INITIAL_REPUTATION = 100;
+    uint256 public constant REPUTATION_PARTICIPATION = 2;
+    uint256 public constant REPUTATION_BID = 1;
+    uint256 public constant REPUTATION_WIN = 10;
 
     // ===== Custom Errors =====
     error UserNotRegistered(address user);
@@ -56,15 +65,25 @@ contract MemberAccountManager is Ownable {
     error PotNotFound(uint256 potId);
     error CycleNotFound(uint256 cycleId);
     error AlreadyMarkedWinner(uint256 potId, uint256 cycleId);
-    error IndexOutOfBounds(uint256 index);
 
     /// === Events ===
 
-    event MemberRegistered(address indexed user);
-    event ParticipationUpdated(address indexed user, uint256 potId, uint256 cycleId);
-    event BidUpdated(address indexed user, uint256 potId, uint256 cycleId, uint256 bidAmount, bool didBid);
-    event WinnerMarked(address indexed user, uint256 potId, uint256 cycleId);
-    event PotFundingUpdated(address indexed user, uint256 potId, uint256 cycleId, uint256 amount);
+    event MemberRegistered(address indexed user, uint256 timestamp);
+    event ParticipationUpdated(
+        address indexed user,
+        uint256 indexed potId,
+        uint256 indexed cycleId,
+        uint256 contribution
+    );
+    event BidUpdated(
+        address indexed user,
+        uint256 indexed potId,
+        uint256 indexed cycleId,
+        uint256 bidAmount,
+        bool didBid
+    );
+    event WinnerMarked(address indexed user, uint256 indexed potId, uint256 indexed cycleId);
+    event ReputationUpdated(address indexed user, uint256 newScore, string reason);
     event AuthorizedCallerAdded(address indexed caller);
     event AuthorizedCallerRemoved(address indexed caller);
 
@@ -80,7 +99,9 @@ contract MemberAccountManager is Ownable {
     }
 
     modifier onlyAuthorized() {
-        if (!authorizedCallers[msg.sender] && msg.sender != owner()) revert NotAuthorized(msg.sender);
+        if (!authorizedCallers[msg.sender] && msg.sender != owner()) {
+            revert NotAuthorized(msg.sender);
+        }
         _;
     }
 
@@ -105,24 +126,26 @@ contract MemberAccountManager is Ownable {
 
         MemberProfile storage profile = memberProfiles[user];
         profile.registered = true;
-        profile.reputationScore = 100; // Starting reputation
-        profile.lastJoinedTimestamp = block.timestamp;
+        profile.reputationScore = INITIAL_REPUTATION;
+        profile.registrationTimestamp = block.timestamp;
+        profile.lastActivityTimestamp = block.timestamp;
 
         registeredMembers.add(user);
 
-        emit MemberRegistered(user);
+        emit MemberRegistered(user, block.timestamp);
     }
 
     /// === Core Functionalities ===
 
-    function updateParticipation(address user, uint256 potId, uint256 cycleId, uint256 contribution, bool isCreator)
-        external
-        onlyAuthorized
-        onlyRegistered(user)
-    {
+    /// @notice Update member participation for a pot cycle
+    function updateParticipation(
+        address user,
+        uint256 potId,
+        uint256 cycleId,
+        uint256 contribution,
+        bool isCreator
+    ) external onlyAuthorized onlyRegistered(user) {
         if (potId == 0) revert InvalidPotId(potId);
-        if (cycleId == 0) revert InvalidCycleId(cycleId);
-        if (contribution == 0) revert InvalidContribution(contribution);
 
         MemberProfile storage profile = memberProfiles[user];
         PotData storage pot = profile.pots[potId];
@@ -133,63 +156,54 @@ contract MemberAccountManager is Ownable {
             pot.isCreator = isCreator;
 
             if (isCreator) {
-                profile.createdPots.push(potId);
+                profile.createdPots.add(potId);
             } else {
-                profile.joinedPots.push(potId);
+                profile.joinedPots.add(potId);
             }
         }
 
-        // Check if cycle already exists
-        bool cycleExists = false;
-        for (uint256 i = 0; i < pot.cycleIds.length; i++) {
-            if (pot.cycleIds[i] == cycleId) {
-                cycleExists = true;
-                break;
+        // If cycleId is 0, this is just pot joining (no cycle yet)
+        if (cycleId == 0) {
+            profile.lastActivityTimestamp = block.timestamp;
+            return;
+        }
+
+        // Handle cycle participation
+        if (cycleId != 0 && contribution != 0) {
+            // Check if cycle already exists
+            bool cycleExists = pot.cycleIds.contains(cycleId);
+
+            if (!cycleExists) {
+                pot.cycleIds.add(cycleId);
+                profile.totalCyclesParticipated += 1;
             }
+
+            // Update or create cycle participation
+            CycleParticipation storage participation = pot.cycleParticipation[cycleId];
+            participation.cycleId = cycleId;
+            participation.contribution = contribution;
+            participation.timestamp = block.timestamp;
+
+            profile.totalContribution += contribution;
+            profile.reputationScore += REPUTATION_PARTICIPATION;
+            profile.lastActivityTimestamp = block.timestamp;
+
+            emit ParticipationUpdated(user, potId, cycleId, contribution);
+            emit ReputationUpdated(user, profile.reputationScore, "participation");
         }
-
-        if (!cycleExists) {
-            pot.cycleIds.push(cycleId);
-            profile.totalCyclesParticipated += 1;
-        }
-
-        pot.cycleParticipation[cycleId] =
-            CycleParticipation({cycleId: cycleId, contribution: contribution, bidAmount: 0, didBid: false, won: false});
-
-        profile.totalContribution += contribution;
-        profile.reputationScore += 2;
-        profile.lastJoinedTimestamp = block.timestamp;
-
-        emit ParticipationUpdated(user, potId, cycleId);
     }
 
-    function updatePotFundingDetails(address user, uint256 potId, uint256 cycleId, uint256 amount)
-        external
-        onlyAuthorized
-        onlyRegistered(user)
-    {
-        if (amount == 0) revert InvalidAmount(amount);
+    /// @notice Update bid information for a cycle
+    function updateBidInfo(
+        address user,
+        uint256 potId,
+        uint256 cycleId,
+        uint256 bidAmount,
+        bool didBid
+    ) external onlyAuthorized onlyRegistered(user) {
+        if (potId == 0) revert InvalidPotId(potId);
+        if (cycleId == 0) revert InvalidCycleId(cycleId);
 
-        PotData storage pot = memberProfiles[user].pots[potId];
-        if (pot.potId == 0) revert PotNotFound(potId);
-
-        CycleParticipation storage participation = pot.cycleParticipation[cycleId];
-        if (participation.cycleId == 0) revert CycleNotFound(cycleId);
-
-        uint256 oldContribution = participation.contribution;
-        participation.contribution = amount;
-
-        // Update total contribution
-        memberProfiles[user].totalContribution = memberProfiles[user].totalContribution - oldContribution + amount;
-
-        emit PotFundingUpdated(user, potId, cycleId, amount);
-    }
-
-    function updateBidInfo(address user, uint256 potId, uint256 cycleId, uint256 bidAmount, bool didBid)
-        external
-        onlyAuthorized
-        onlyRegistered(user)
-    {
         PotData storage pot = memberProfiles[user].pots[potId];
         if (pot.potId == 0) revert PotNotFound(potId);
 
@@ -200,13 +214,24 @@ contract MemberAccountManager is Ownable {
         participation.didBid = didBid;
 
         if (didBid) {
-            memberProfiles[user].reputationScore += 1;
+            memberProfiles[user].reputationScore += REPUTATION_BID;
+            memberProfiles[user].lastActivityTimestamp = block.timestamp;
+            
+            emit ReputationUpdated(user, memberProfiles[user].reputationScore, "bid_placed");
         }
 
         emit BidUpdated(user, potId, cycleId, bidAmount, didBid);
     }
 
-    function markAsWinner(address user, uint256 potId, uint256 cycleId) external onlyAuthorized onlyRegistered(user) {
+    /// @notice Mark a user as winner for a cycle
+    function markAsWinner(
+        address user,
+        uint256 potId,
+        uint256 cycleId
+    ) external onlyAuthorized onlyRegistered(user) {
+        if (potId == 0) revert InvalidPotId(potId);
+        if (cycleId == 0) revert InvalidCycleId(cycleId);
+
         PotData storage pot = memberProfiles[user].pots[potId];
         if (pot.potId == 0) revert PotNotFound(potId);
 
@@ -216,13 +241,16 @@ contract MemberAccountManager is Ownable {
 
         participation.won = true;
         memberProfiles[user].totalCyclesWon += 1;
-        memberProfiles[user].reputationScore += 10; // Bonus for winning
+        memberProfiles[user].reputationScore += REPUTATION_WIN;
+        memberProfiles[user].lastActivityTimestamp = block.timestamp;
 
         emit WinnerMarked(user, potId, cycleId);
+        emit ReputationUpdated(user, memberProfiles[user].reputationScore, "cycle_won");
     }
 
     /// === Read Functions ===
 
+    /// @notice Get comprehensive member profile
     function getMemberProfile(address user)
         external
         view
@@ -232,7 +260,8 @@ contract MemberAccountManager is Ownable {
             uint256 totalCyclesWon,
             uint256 totalContribution,
             uint256 reputationScore,
-            uint256 lastJoinedTimestamp,
+            uint256 registrationTimestamp,
+            uint256 lastActivityTimestamp,
             uint256[] memory createdPots,
             uint256[] memory joinedPots
         )
@@ -244,44 +273,136 @@ contract MemberAccountManager is Ownable {
             p.totalCyclesWon,
             p.totalContribution,
             p.reputationScore,
-            p.lastJoinedTimestamp,
-            p.createdPots,
-            p.joinedPots
+            p.registrationTimestamp,
+            p.lastActivityTimestamp,
+            p.createdPots.values(),
+            p.joinedPots.values()
         );
     }
 
+    /// @notice Check if user is registered
     function isRegistered(address user) external view returns (bool) {
         return memberProfiles[user].registered;
     }
 
+    /// @notice Get total number of registered members
     function getTotalMembers() external view returns (uint256) {
         return registeredMembers.length();
     }
 
+    /// @notice Get member address by index (for iteration)
     function getMemberByIndex(uint256 index) external view returns (address) {
-        if (index >= registeredMembers.length()) revert IndexOutOfBounds(index);
         return registeredMembers.at(index);
     }
 
-    function getCycleParticipation(address user, uint256 potId, uint256 cycleId)
-        external
-        view
-        returns (CycleParticipation memory)
-    {
+    /// @notice Get cycle participation details
+    function getCycleParticipation(
+        address user,
+        uint256 potId,
+        uint256 cycleId
+    ) external view returns (CycleParticipation memory) {
         return memberProfiles[user].pots[potId].cycleParticipation[cycleId];
     }
 
-    function getPotCycles(address user, uint256 potId) external view returns (uint256[] memory) {
-        return memberProfiles[user].pots[potId].cycleIds;
+    /// @notice Get all cycle IDs for a user in a pot
+    function getPotCycles(address user, uint256 potId) 
+        external 
+        view 
+        returns (uint256[] memory) 
+    {
+        return memberProfiles[user].pots[potId].cycleIds.values();
     }
 
+    /// @notice Get user's reputation score
     function getReputationScore(address user) external view returns (uint256) {
         return memberProfiles[user].reputationScore;
     }
 
+    /// @notice Get user's win rate (in basis points)
     function getWinRate(address user) external view returns (uint256) {
         MemberProfile storage profile = memberProfiles[user];
         if (profile.totalCyclesParticipated == 0) return 0;
-        return (profile.totalCyclesWon * 10000) / profile.totalCyclesParticipated; // Basis points
+        return (profile.totalCyclesWon * 10000) / profile.totalCyclesParticipated;
+    }
+
+    /// @notice Check if user is pot creator
+    function isPotCreator(address user, uint256 potId) external view returns (bool) {
+        return memberProfiles[user].pots[potId].isCreator;
+    }
+
+    /// @notice Get user statistics
+    function getUserStats(address user)
+        external
+        view
+        returns (
+            uint256 totalPots,
+            uint256 totalCycles,
+            uint256 totalWins,
+            uint256 winRate,
+            uint256 reputation
+        )
+    {
+        MemberProfile storage profile = memberProfiles[user];
+        uint256 totalPotsCount = profile.createdPots.length() + profile.joinedPots.length();
+        uint256 winRateCalc = profile.totalCyclesParticipated > 0
+            ? (profile.totalCyclesWon * 10000) / profile.totalCyclesParticipated
+            : 0;
+
+        return (
+            totalPotsCount,
+            profile.totalCyclesParticipated,
+            profile.totalCyclesWon,
+            winRateCalc,
+            profile.reputationScore
+        );
+    }
+
+    /// @notice Get list of top members by reputation
+    function getTopMembers(uint256 count) 
+        external 
+        view 
+        returns (address[] memory topMembers, uint256[] memory scores) 
+    {
+        uint256 totalMembers = registeredMembers.length();
+        uint256 resultCount = count > totalMembers ? totalMembers : count;
+
+        topMembers = new address[](resultCount);
+        scores = new uint256[](resultCount);
+
+        // Simple sorting - for production, consider off-chain sorting
+        for (uint256 i = 0; i < resultCount; i++) {
+            uint256 highestScore = 0;
+            address highestMember = address(0);
+            uint256 highestIndex = 0;
+
+            for (uint256 j = 0; j < totalMembers; j++) {
+                address member = registeredMembers.at(j);
+                uint256 score = memberProfiles[member].reputationScore;
+
+                // Check if not already in results
+                bool alreadyAdded = false;
+                for (uint256 k = 0; k < i; k++) {
+                    if (topMembers[k] == member) {
+                        alreadyAdded = true;
+                        break;
+                    }
+                }
+
+                if (!alreadyAdded && score > highestScore) {
+                    highestScore = score;
+                    highestMember = member;
+                    highestIndex = j;
+                }
+            }
+
+            if (highestMember != address(0)) {
+                topMembers[i] = highestMember;
+                scores[i] = highestScore;
+            }
+        }
+
+        return (topMembers, scores);
     }
 }
+
+// new address: 0xca8E6A39d9622fbc37a7d991DDa89409a8C344dF
