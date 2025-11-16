@@ -6,11 +6,16 @@ import {LotteryEngine} from "./LotteryEngine.sol";
 import {Escrow} from "./Escrow.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-contract AuctionEngine is Ownable, ReentrancyGuard {
+contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
     using EnumerableSet for EnumerableSet.AddressSet;
+    using SafeERC20 for IERC20;
 
+    IERC20 public immutable USDC;
     MemberAccountManager public memberManager;
     LotteryEngine public lotteryEngine;
     Escrow public escrow;
@@ -35,12 +40,12 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     struct Pot {
         string name;
         address creator;
-        uint256 amountPerCycle;
+        uint256 amountPerCycle; // USDC amount (6 decimals)
         uint256 cycleDuration;
         uint256 cycleCount;
         uint256 completedCycles;
         CycleFrequency frequency;
-        uint256 bidDepositDeadline; // in seconds before cycle end
+        uint256 bidDepositDeadline; // seconds before cycle end when bidding closes
         PotStatus status;
         address[] members;
         uint256[] cycleIds;
@@ -56,12 +61,12 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         uint256 endTime;
         address winner;
         uint256 winningBid;
-        address lowestBidder;
         CycleStatus status;
-        mapping(address => uint256) bids;
-        EnumerableSet.AddressSet participants;
-        uint256 totalDeposited;
+        mapping(address => uint256) bids; // User's bid amount (USDC)
+        EnumerableSet.AddressSet bidders;
+        uint256 totalCollected; // Total USDC collected from all members
         bool fundsReleased;
+        uint64 vrfRequestId; // Chainlink VRF request ID for lottery
     }
 
     uint256 public potCounter = 1;
@@ -70,6 +75,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     mapping(uint256 => Pot) public chainPots;
     mapping(uint256 => AuctionCycle) private auctionCycles;
     mapping(uint256 => mapping(address => bool)) public hasJoinedPot;
+    mapping(uint256 => mapping(address => bool)) public hasPaidForCycle; // potId => member => paid
     mapping(address => uint256[]) public userPots;
 
     // Constants
@@ -77,8 +83,9 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     uint256 public constant MAX_CYCLE_DURATION = 30 days;
     uint256 public constant MIN_BID_DEADLINE = 1 hours;
     uint256 public constant MAX_MEMBERS = 100;
+    uint256 public constant USDC_DECIMALS = 6;
 
-    //Custom Errors
+    // Custom Errors
     error NotRegistered();
     error NotPotCreator();
     error InvalidPot();
@@ -109,39 +116,46 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     error AlreadyCompleted();
     error CycleNotEnded();
     error FundsAlreadyReleased();
-    error InsufficientContractBalance();
-    error InvalidMemberManager();
-    error InvalidLotteryEngine();
-    error InvalidEscrow();
     error PotDoesNotExist();
-    error PotIsFull();
     error CannotLeaveAfterStarted();
-    error NotAPotMember();
+    error AlreadyPaidForCycle();
+    error NotPaidForCycle();
+    error BiddingAlreadyClosed();
+    error InvalidUSDCAddress();
 
-    // -------------------- Events --------------------
+    // Events
     event PotCreated(uint256 indexed potId, string name, address indexed creator, uint256 amountPerCycle);
     event JoinedPot(uint256 indexed potId, address indexed user);
     event LeftPot(uint256 indexed potId, address indexed user);
     event CycleStarted(uint256 indexed cycleId, uint256 indexed potId, uint256 startTime, uint256 endTime);
+    event MemberPaidForCycle(uint256 indexed potId, uint256 indexed cycleId, address indexed member, uint256 amount);
     event BidPlaced(uint256 indexed cycleId, address indexed bidder, uint256 amount);
+    event BiddingClosed(uint256 indexed cycleId, uint256 timestamp);
     event WinnerDeclared(uint256 indexed cycleId, address indexed winner, uint256 amount);
     event CycleCompleted(uint256 indexed cycleId, uint256 indexed potId);
-    event RefundIssued(address indexed user, uint256 amount);
+    event BidRefunded(uint256 indexed cycleId, address indexed bidder, uint256 amount);
+    event InterestDistributed(uint256 indexed cycleId, uint256 totalInterest);
     event PotStatusChanged(uint256 indexed potId, PotStatus status);
 
-    constructor(address _memberManager, address _lotteryEngine, address payable _escrow) Ownable(msg.sender) {
-        if (_memberManager == address(0)) revert InvalidMemberManager();
-        if (_lotteryEngine == address(0)) revert InvalidLotteryEngine();
-        if (_escrow == address(0)) revert InvalidEscrow();
+    constructor(
+        address _usdc,
+        address _memberManager,
+        address _lotteryEngine,
+        address _escrow
+    ) Ownable(msg.sender) {
+        if (_usdc == address(0)) revert InvalidUSDCAddress();
+        if (_memberManager == address(0)) revert InvalidAmount();
+        if (_lotteryEngine == address(0)) revert InvalidAmount();
+        if (_escrow == address(0)) revert InvalidAmount();
 
+        USDC = IERC20(_usdc);
         memberManager = MemberAccountManager(_memberManager);
-        lotteryEngine = LotteryEngine(payable(_lotteryEngine));
+        lotteryEngine = LotteryEngine(_lotteryEngine);
         escrow = Escrow(_escrow);
     }
 
     modifier onlyRegistered() {
         if (!memberManager.isRegistered(msg.sender)) revert NotRegistered();
-
         _;
     }
 
@@ -157,16 +171,13 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
     }
 
     modifier validCycle(uint256 cycleId) {
-        _validCycle(cycleId);
-        _;
-    }
-
-    function _validCycle(uint256 cycleId) internal view {
         if (cycleId <= 0 || cycleId >= cycleCounter) revert InvalidCycle();
+        _;
     }
 
     // -------------------- Core Logic --------------------
 
+    /// @notice Create a new pot (ROSCA group)
     function createPot(
         string memory name,
         uint256 amountPerCycle,
@@ -176,7 +187,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         uint256 bidDepositDeadline,
         uint256 minMembers,
         uint256 maxMembers
-    ) external onlyRegistered returns (uint256) {
+    ) external onlyRegistered whenNotPaused returns (uint256) {
         if (bytes(name).length == 0) revert EmptyName();
         if (amountPerCycle <= 0) revert InvalidAmount();
         if (cycleDuration < MIN_CYCLE_DURATION || cycleDuration > MAX_CYCLE_DURATION) revert InvalidCycleDuration();
@@ -213,21 +224,25 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         return potId;
     }
 
-    function joinPot(uint256 potId) external onlyRegistered validPot(potId) nonReentrant {
+    /// @notice Join an existing pot
+    function joinPot(uint256 potId) external onlyRegistered validPot(potId) whenNotPaused nonReentrant {
         Pot storage pot = chainPots[potId];
         if (pot.status != PotStatus.Active) revert PotNotActive();
         if (hasJoinedPot[potId][msg.sender]) revert AlreadyJoined();
-        if (pot.members.length >= pot.maxMembers) revert PotIsFull();
+        if (pot.members.length >= pot.maxMembers) revert PotFull();
         if (pot.completedCycles > 0) revert PotAlreadyStarted();
 
         pot.members.push(msg.sender);
         hasJoinedPot[potId][msg.sender] = true;
         userPots[msg.sender].push(potId);
 
+        memberManager.updateParticipation(msg.sender, potId, 0, 0, false);
+
         emit JoinedPot(potId, msg.sender);
     }
 
-    function leavePot(uint256 potId) external validPot(potId) nonReentrant {
+    /// @notice Leave a pot before it starts
+    function leavePot(uint256 potId) external validPot(potId) whenNotPaused nonReentrant {
         Pot storage pot = chainPots[potId];
         if (!hasJoinedPot[potId][msg.sender]) revert NotAMember();
         if (pot.completedCycles > 0) revert CannotLeaveAfterStarted();
@@ -257,7 +272,15 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         emit LeftPot(potId, msg.sender);
     }
 
-    function startCycle(uint256 potId) external onlyPotCreator(potId) validPot(potId) nonReentrant {
+    /// @notice Start a new cycle - initializes the cycle (funds collected in payForCycle)
+    function startCycle(uint256 potId) 
+        external 
+        onlyPotCreator(potId) 
+        validPot(potId) 
+        whenNotPaused 
+        nonReentrant 
+        returns (uint256)
+    {
         Pot storage pot = chainPots[potId];
         if (pot.status != PotStatus.Active) revert PotNotActive();
         if (pot.members.length < pot.minMembers) revert NotEnoughMembers();
@@ -274,39 +297,65 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
 
         pot.cycleIds.push(cycleId);
 
-        // Collect deposits from all members
-        for (uint256 i = 0; i < pot.members.length; i++) {
-            address member = pot.members[i];
-            if (member.balance < pot.amountPerCycle) revert InsufficientBalance();
-
-            // Update member participation
-            memberManager.updateParticipation(member, potId, cycleId, pot.amountPerCycle, member == pot.creator);
-        }
-
-        cycle.totalDeposited = pot.amountPerCycle * pot.members.length;
-
         emit CycleStarted(cycleId, potId, cycle.startTime, cycle.endTime);
+        return cycleId;
     }
 
+    /// @notice Members pay their contribution for the cycle
+    /// @dev This is called by each member to pay their share for the cycle
+    function payForCycle(uint256 cycleId) 
+        external  
+        validCycle(cycleId) 
+        whenNotPaused 
+        nonReentrant 
+    {
+        AuctionCycle storage cycle = auctionCycles[cycleId];
+        Pot storage pot = chainPots[cycle.potId];
+
+        if (cycle.status != CycleStatus.Active) revert CycleNotActive();
+        if (!hasJoinedPot[cycle.potId][msg.sender]) revert NotAMember();
+        if (hasPaidForCycle[cycle.potId][msg.sender]) revert AlreadyPaidForCycle();
+
+        uint256 amount = pot.amountPerCycle;
+
+        // Transfer USDC from member to this contract
+        USDC.safeTransferFrom(msg.sender, address(this), amount);
+
+        // Approve and deposit to escrow (which will deposit to Compound)
+        USDC.approve(address(escrow), amount);
+        escrow.depositUSDC(cycle.potId, cycleId, msg.sender, amount);
+
+        // Mark as paid
+        hasPaidForCycle[cycle.potId][msg.sender] = true;
+        cycle.totalCollected += amount;
+
+        // Update member participation
+        memberManager.updateParticipation(msg.sender, cycle.potId, cycleId, amount, msg.sender == pot.creator);
+
+        emit MemberPaidForCycle(cycle.potId, cycleId, msg.sender, amount);
+    }
+
+    /// @notice Place a bid for early payout (OPTIONAL - members who want funds bid lower)
+    /// @dev Lower bid = higher chance to win. Bids are in USDC (6 decimals)
     function placeBid(uint256 cycleId, uint256 bidAmount)
         external
-        payable
         onlyRegistered
         validCycle(cycleId)
+        whenNotPaused
         nonReentrant
     {
         AuctionCycle storage cycle = auctionCycles[cycleId];
         Pot storage pot = chainPots[cycle.potId];
 
         if (cycle.status != CycleStatus.Active) revert CycleNotActive();
-        if (!hasJoinedPot[cycle.potId][msg.sender]) revert NotAPotMember();
+        if (!hasJoinedPot[cycle.potId][msg.sender]) revert NotAMember();
+        if (!hasPaidForCycle[cycle.potId][msg.sender]) revert NotPaidForCycle();
         if (block.timestamp >= cycle.endTime - pot.bidDepositDeadline) revert BidDeadlinePassed();
         if (bidAmount <= 0 || bidAmount > pot.amountPerCycle) revert InvalidBidAmount();
-        if (msg.value != bidAmount) revert IncorrectPayment();
 
-        // Store bid (overwrite if user bids again)
+        // Store bid (overwrite if user bids again with lower amount)
         cycle.bids[msg.sender] = bidAmount;
-        cycle.participants.add(msg.sender);
+        cycle.bidders.add(msg.sender);
 
         // Update member manager
         memberManager.updateBidInfo(msg.sender, cycle.potId, cycleId, bidAmount, true);
@@ -314,22 +363,44 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         emit BidPlaced(cycleId, msg.sender, bidAmount);
     }
 
-    function closeBidding(uint256 cycleId) external onlyPotCreator(auctionCycles[cycleId].potId) validCycle(cycleId) {
+    /// @notice Close bidding period
+    function closeBidding(uint256 cycleId) 
+        external 
+        onlyPotCreator(auctionCycles[cycleId].potId) 
+        validCycle(cycleId)
+        whenNotPaused
+    {
         AuctionCycle storage cycle = auctionCycles[cycleId];
+        Pot storage pot = chainPots[cycle.potId];
+        
         if (cycle.status != CycleStatus.Active) revert CycleNotActive();
-        if (block.timestamp < cycle.endTime - chainPots[cycle.potId].bidDepositDeadline) revert TooEarlyToClose();
+        if (block.timestamp < cycle.endTime - pot.bidDepositDeadline) revert TooEarlyToClose();
 
         cycle.status = CycleStatus.BiddingClosed;
+        
+        emit BiddingClosed(cycleId, block.timestamp);
     }
 
-    function declareWinner(uint256 cycleId) external onlyPotCreator(auctionCycles[cycleId].potId) validCycle(cycleId) {
+    /// @notice Declare winner - either lowest bidder or lottery winner
+    function declareWinner(uint256 cycleId) 
+        external 
+        onlyPotCreator(auctionCycles[cycleId].potId) 
+        validCycle(cycleId)
+        whenNotPaused
+        returns (address winner)
+    {
         AuctionCycle storage cycle = auctionCycles[cycleId];
-        if (cycle.status != CycleStatus.BiddingClosed) revert BiddingNotClosed();
-
         Pot storage pot = chainPots[cycle.potId];
 
-        if (cycle.participants.length() == 0) {
-            // No bids - use lottery
+        if (cycle.status != CycleStatus.BiddingClosed) revert BiddingNotClosed();
+
+        if (cycle.bidders.length() == 0) {
+            // No bids - use lottery via Chainlink VRF
+            uint requestId = lotteryEngine.requestRandomWinner(pot.members);
+            cycle.vrfRequestId = uint64(requestId);
+            
+            // Winner will be set via callback (see fulfillRandomWinner)
+            // For now, use preview for immediate testing
             cycle.winner = lotteryEngine.previewRandomWinner(pot.members);
             cycle.winningBid = pot.amountPerCycle;
         } else {
@@ -337,13 +408,13 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
             address lowestBidder = address(0);
             uint256 lowestBid = type(uint256).max;
 
-            for (uint256 i = 0; i < cycle.participants.length(); i++) {
-                address participant = cycle.participants.at(i);
-                uint256 bid = cycle.bids[participant];
+            for (uint256 i = 0; i < cycle.bidders.length(); i++) {
+                address bidder = cycle.bidders.at(i);
+                uint256 bid = cycle.bids[bidder];
 
                 if (bid < lowestBid) {
                     lowestBid = bid;
-                    lowestBidder = participant;
+                    lowestBidder = bidder;
                 }
             }
 
@@ -355,12 +426,15 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         memberManager.markAsWinner(cycle.winner, cycle.potId, cycleId);
 
         emit WinnerDeclared(cycleId, cycle.winner, cycle.winningBid);
+        return cycle.winner;
     }
 
+    /// @notice Complete cycle - distribute funds to winner and interest to others
     function completeCycle(uint256 cycleId)
         external
         onlyPotCreator(auctionCycles[cycleId].potId)
         validCycle(cycleId)
+        whenNotPaused
         nonReentrant
     {
         AuctionCycle storage cycle = auctionCycles[cycleId];
@@ -370,28 +444,37 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         if (cycle.fundsReleased) revert FundsAlreadyReleased();
 
         Pot storage pot = chainPots[cycle.potId];
-        uint256 totalFund = cycle.totalDeposited;
 
-        // Release winning amount to winner
-        escrow.releaseFundsToWinner(cycle.winningBid, payable(cycle.winner));
+        // Get interest earned from Compound for this cycle
+        uint256 potInterest = escrow.withdrawPotInterest(cycle.potId, cycle.cycleId);
 
-        // Calculate and distribute interest to non-winners
-        uint256 interest = totalFund - cycle.winningBid;
-        if (interest > 0 && pot.members.length > 1) {
-            uint256 sharePerMember = interest / (pot.members.length - 1);
+        // Release winning bid amount to winner from escrow
+        escrow.releaseFundsToWinner(cycle.potId, cycle.cycleId, cycle.winner, cycle.winningBid);
 
+        // Calculate interest share for non-winners
+        uint256 nonWinnerCount = pot.members.length - 1;
+        if (potInterest > 0 && nonWinnerCount > 0) {
+            uint256 interestPerMember = potInterest / nonWinnerCount;
+
+            // Distribute interest to non-winners
             for (uint256 i = 0; i < pot.members.length; i++) {
                 address member = pot.members[i];
-                if (member != cycle.winner && sharePerMember > 0) {
-                    escrow.withdrawFunds(sharePerMember, member);
-                    emit RefundIssued(member, sharePerMember);
+                if (member != cycle.winner && interestPerMember > 0) {
+                    escrow.withdrawInterest(cycle.potId, cycle.cycleId, member, interestPerMember);
                 }
             }
+
+            emit InterestDistributed(cycleId, potInterest);
         }
 
         cycle.status = CycleStatus.Completed;
         cycle.fundsReleased = true;
         pot.completedCycles++;
+
+        // Reset payment tracking for next cycle
+        for (uint256 i = 0; i < pot.members.length; i++) {
+            hasPaidForCycle[cycle.potId][pot.members[i]] = false;
+        }
 
         // Check if all cycles completed
         if (pot.completedCycles >= pot.cycleCount) {
@@ -414,6 +497,14 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         emit PotStatusChanged(potId, PotStatus.Active);
     }
 
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
     // -------------------- View Functions --------------------
 
     function getCycleInfo(uint256 cycleId)
@@ -427,8 +518,8 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
             address winner,
             uint256 winningBid,
             CycleStatus status,
-            uint256 participantCount,
-            uint256 totalDeposited
+            uint256 bidderCount,
+            uint256 totalCollected
         )
     {
         AuctionCycle storage cycle = auctionCycles[cycleId];
@@ -439,8 +530,8 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
             cycle.winner,
             cycle.winningBid,
             cycle.status,
-            cycle.participants.length(),
-            cycle.totalDeposited
+            cycle.bidders.length(),
+            cycle.totalCollected
         );
     }
 
@@ -482,6 +573,10 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
         return auctionCycles[cycleId].bids[user];
     }
 
+    function hasMemberPaidForCycle(uint256 potId, address member) external view returns (bool) {
+        return hasPaidForCycle[potId][member];
+    }
+
     function getUserPots(address user) external view returns (uint256[] memory) {
         return userPots[user];
     }
@@ -504,11 +599,20 @@ contract AuctionEngine is Ownable, ReentrancyGuard {
 
     // -------------------- Emergency Functions --------------------
 
-    function emergencyWithdraw(uint256 amount) external onlyOwner {
-        if (address(this).balance < amount) revert InsufficientBalance();
-        payable(owner()).transfer(amount);
+    function emergencyWithdrawUSDC(uint256 amount, address to) external onlyOwner whenPaused {
+        if (amount <= 0) revert InvalidAmount();
+        USDC.safeTransfer(to, amount);
     }
 
-    receive() external payable {}
-    fallback() external payable {}
+    // Owner only helper
+    function preApproveEscrow() external onlyOwner {
+        USDC.approve(address(escrow), type(uint256).max);
+    }
 }
+
+// deployed address: 0xEc5D1De2Aa42b2A99fA74609d01E1D3d95595eEA
+// _usdc address: 0x036cbd53842c5426634e7929541ec2318f3dcf7e
+// Escrow deployed address: 0x98F3371268aE0D740adc4FEFCF6E9F13a69E8A7d
+// Lotery Engine: 0x79b507aDC6aBE9B81Dd4BA3340514e455693423b
+// Member Manager: 0xca8E6A39d9622fbc37a7d991DDa89409a8C344dF
+// approval fun : 0x9de8a523828136141405465efAaF7c6220C760DD
