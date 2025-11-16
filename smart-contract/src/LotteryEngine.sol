@@ -2,190 +2,230 @@
 pragma solidity ^0.8.20;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {IEntropyConsumer} from "@pythnetwork/entropy-sdk-solidity/IEntropyConsumer.sol";
-import {IEntropyV2} from "@pythnetwork/entropy-sdk-solidity/IEntropyV2.sol";
+import {VRFConsumerBaseV2Plus} from "@chainlink/contracts/src/v0.8/vrf/dev/VRFConsumerBaseV2Plus.sol";
+import {VRFV2PlusClient} from "@chainlink/contracts/src/v0.8/vrf/dev/libraries/VRFV2PlusClient.sol";
 
 /// @title LotteryEngine
-/// @notice Provides random winner selection for ChainPot auctions using Pyth Network's Entropy
-contract LotteryEngine is Ownable, IEntropyConsumer {
-    IEntropyV2 public immutable ENTROPY;
-    address public entropyProvider;
+/// @notice Provides random winner selection for ChainPot auctions using Chainlink VRF
+/// @dev Implements Chainlink VRF V2.5 for verifiable randomness
+contract LotteryEngine is VRFConsumerBaseV2Plus {
+    
+    // Chainlink VRF Configuration for Base Sepolia
+    uint256 public subscriptionId;
+    bytes32 public keyHash;
+    uint32 public callbackGasLimit = 200000;
+    uint16 public requestConfirmations = 3;
+    uint32 public numWords = 1;
 
-    uint256 private nonce;
-    uint64 private sequenceNumber;
-
-    // Mapping to store pending random requests
-    mapping(uint64 => RandomRequest) public pendingRequests;
+    // Request tracking
+    mapping(uint256 => RandomRequest) public requests;
+    mapping(uint256 => address) public winners; // requestId => winner address
 
     struct RandomRequest {
-        RequestType requestType;
         address[] participants;
-        uint256 min;
-        uint256 max;
         address requester;
         bool fulfilled;
+        uint256 randomWord;
     }
 
-    enum RequestType {
-        WINNER_SELECTION,
-        RANDOM_NUMBER
-    }
-    // ---------- Custom Errors ----------
+    // Custom Errors
     error NoParticipants();
-    error InvalidRange();
-    error InsufficientFee(uint256 sent, uint256 required);
-    error RequestAlreadyFulfilled(uint64 sequenceNum);
-    error InvalidRequest(uint64 sequenceNum);
-    // -----------------    Custom Events    ------------------
-    event RandomWinnerSelected(address indexed winner, uint256 randomSeed, uint64 sequenceNumber);
-    event RandomNumberGenerated(uint256 randomNumber, uint64 sequenceNumber);
-    event RandomRequested(uint64 indexed sequenceNumber, RequestType requestType);
-    event EntropyProviderUpdated(address indexed newProvider);
+    error RequestNotFound(uint256 requestId);
+    error RequestAlreadyFulfilled(uint256 requestId);
+    error InvalidSubscriptionId();
+    error InvalidKeyHash();
 
-    constructor(address _entropy, address _entropyProvider) Ownable(msg.sender) {
-        ENTROPY = IEntropyV2(_entropy);
-        entropyProvider = _entropyProvider;
-        nonce = 1;
-        sequenceNumber = 1;
+    // Events
+    event RandomWinnerRequested(uint256 indexed requestId, uint256 numParticipants);
+    event RandomWinnerSelected(uint256 indexed requestId, address indexed winner, uint256 randomWord);
+    event VRFConfigUpdated(uint256 subscriptionId, bytes32 keyHash);
+
+    /// @notice Constructor for Chainlink VRF integration
+    /// @param _vrfCoordinator Chainlink VRF Coordinator address for Base Sepolia
+    /// @param _subscriptionId Your Chainlink VRF subscription ID
+    /// @param _keyHash The gas lane key hash
+    constructor(
+        address _vrfCoordinator,
+        uint256 _subscriptionId,
+        bytes32 _keyHash
+    ) VRFConsumerBaseV2Plus(_vrfCoordinator) {
+        if (_subscriptionId == 0) revert InvalidSubscriptionId();
+        if (_keyHash == bytes32(0)) revert InvalidKeyHash();
+
+        subscriptionId = _subscriptionId;
+        keyHash = _keyHash;
     }
 
-    /// @notice Update the entropy provider address
-    /// @param _entropyProvider New entropy provider address
-    function setEntropyProvider(address _entropyProvider) external onlyOwner {
-        entropyProvider = _entropyProvider;
-        emit EntropyProviderUpdated(_entropyProvider);
+    // -------------------- Admin Functions --------------------
+
+    /// @notice Update VRF configuration
+    function setVRFConfig(
+        uint256 _subscriptionId,
+        bytes32 _keyHash,
+        uint32 _callbackGasLimit,
+        uint16 _requestConfirmations
+    ) external onlyOwner {
+        if (_subscriptionId == 0) revert InvalidSubscriptionId();
+        if (_keyHash == bytes32(0)) revert InvalidKeyHash();
+
+        subscriptionId = _subscriptionId;
+        keyHash = _keyHash;
+        callbackGasLimit = _callbackGasLimit;
+        requestConfirmations = _requestConfirmations;
+
+        emit VRFConfigUpdated(_subscriptionId, _keyHash);
     }
 
-    /// @notice Get the entropy contract address
-    function getEntropy() internal view override returns (address) {
-        return address(ENTROPY);
-    }
+    // -------------------- Core Functions --------------------
 
-    /// @notice Select a random winner from an array of addresses
+    /// @notice Request a random winner from the list of participants
     /// @param participants Array of participant addresses
-    /// @return sequenceNum The sequence number for this random request
-    function selectRandomWinner(address[] memory participants) external payable returns (uint64 sequenceNum) {
-        if (participants.length == 0) revert NoParticipants();
-        if (msg.value < ENTROPY.getFeeV2()) revert InsufficientFee(msg.value, ENTROPY.getFeeV2());
-        sequenceNum = sequenceNumber++;
-
-        // Store the request details
-        pendingRequests[sequenceNum] = RandomRequest({
-            requestType: RequestType.WINNER_SELECTION,
-            participants: participants,
-            min: 0,
-            max: 0,
-            requester: msg.sender,
-            fulfilled: false
-        });
-
-        // Generate user random number (can be any value)
-        bytes32 userRandomNumber = keccak256(abi.encodePacked(block.timestamp, msg.sender, nonce++));
-        uint32 gasLimit = 200_000;
-        // Request randomness from Pyth
-        ENTROPY.requestV2{value: msg.value}(entropyProvider, userRandomNumber, gasLimit);
-
-        emit RandomRequested(sequenceNum, RequestType.WINNER_SELECTION);
-        return sequenceNum;
-    }
-
-    /// @notice Generate a random number within a range
-    /// @param min Minimum value (inclusive)
-    /// @param max Maximum value (exclusive)
-    /// @return sequenceNum The sequence number for this random request
-    function getRandomNumber(uint256 min, uint256 max) external payable returns (uint64 sequenceNum) {
-        if (max <= min) revert InvalidRange();
-        if (msg.value < ENTROPY.getFeeV2()) revert InsufficientFee(msg.value, ENTROPY.getFeeV2());
-
-        sequenceNum = sequenceNumber++;
-
-        // Store the request details
-        address[] memory emptyArray;
-        pendingRequests[sequenceNum] = RandomRequest({
-            requestType: RequestType.RANDOM_NUMBER,
-            participants: emptyArray,
-            min: min,
-            max: max,
-            requester: msg.sender,
-            fulfilled: false
-        });
-
-        // Generate user random number
-        bytes32 userRandomNumber = keccak256(abi.encodePacked(block.timestamp, msg.sender, nonce++, min, max));
-        uint32 gasLimit = 200_000;
-        // Request randomness from Pyth
-        ENTROPY.requestV2{value: msg.value}(entropyProvider, userRandomNumber, gasLimit);
-
-        emit RandomRequested(sequenceNum, RequestType.RANDOM_NUMBER);
-        return sequenceNum;
-    }
-
-    /// @notice Callback function called by Entropy contract with random number
-    /// @param sequenceNum The sequence number of the request
-    /// @param randomNumber The random number provided by Pyth
-    function entropyCallback(
-        uint64 sequenceNum,
-        address, // provider (unused)
-        bytes32 randomNumber
-    )
-        internal
-        override
+    /// @return requestId The VRF request ID
+    function requestRandomWinner(address[] memory participants) 
+        external 
+        returns (uint256 requestId) 
     {
-        RandomRequest storage request = pendingRequests[sequenceNum];
-        if (request.fulfilled) revert RequestAlreadyFulfilled(sequenceNum);
-        if (request.requester == address(0)) revert InvalidRequest(sequenceNum);
-
-        request.fulfilled = true;
-        uint256 randomValue = uint256(randomNumber);
-
-        if (request.requestType == RequestType.WINNER_SELECTION) {
-            uint256 winnerIndex = randomValue % request.participants.length;
-            address winner = request.participants[winnerIndex];
-            emit RandomWinnerSelected(winner, randomValue, sequenceNum);
-        } else if (request.requestType == RequestType.RANDOM_NUMBER) {
-            uint256 result = request.min + (randomValue % (request.max - request.min));
-            emit RandomNumberGenerated(result, sequenceNum);
-        }
-    }
-
-    /// @notice View function to simulate random selection (doesn't modify state)
-    /// @param participants Array of participant addresses
-    /// @return Simulated winner address
-    function previewRandomWinner(address[] memory participants) external view returns (address) {
         if (participants.length == 0) revert NoParticipants();
 
-        uint256 randomSeed =
-            uint256(keccak256(abi.encodePacked(block.timestamp, block.prevrandao, block.number, msg.sender, nonce)));
+        // Request random words from Chainlink VRF
+        requestId = s_vrfCoordinator.requestRandomWords(
+            VRFV2PlusClient.RandomWordsRequest({
+                keyHash: keyHash,
+                subId: subscriptionId,
+                requestConfirmations: requestConfirmations,
+                callbackGasLimit: callbackGasLimit,
+                numWords: numWords,
+                extraArgs: VRFV2PlusClient._argsToBytes(
+                    VRFV2PlusClient.ExtraArgsV1({nativePayment: false})
+                )
+            })
+        );
 
-        uint256 winnerIndex = randomSeed % participants.length;
-        return participants[winnerIndex];
+        // Store request details
+        requests[requestId] = RandomRequest({
+            participants: participants,
+            requester: msg.sender,
+            fulfilled: false,
+            randomWord: 0
+        });
+
+        emit RandomWinnerRequested(requestId, participants.length);
+        return requestId;
     }
 
-    /// @notice Get the fee required for a random request
-    /// @return fee The fee amount in wei
-    function getRandomFee() external view returns (uint256 fee) {
-        return ENTROPY.getFeeV2();
+    /// @notice Callback function used by VRF Coordinator
+    /// @param requestId The ID of the VRF request
+    /// @param randomWords Array of random values from Chainlink VRF
+    function fulfillRandomWords(
+        uint256 requestId,
+        uint256[] calldata randomWords
+    ) internal override {
+        RandomRequest storage request = requests[requestId];
+        
+        if (request.requester == address(0)) revert RequestNotFound(requestId);
+        if (request.fulfilled) revert RequestAlreadyFulfilled(requestId);
+
+        // Mark as fulfilled
+        request.fulfilled = true;
+        request.randomWord = randomWords[0];
+
+        // Select winner
+        uint256 winnerIndex = randomWords[0] % request.participants.length;
+        address winner = request.participants[winnerIndex];
+        winners[requestId] = winner;
+
+        emit RandomWinnerSelected(requestId, winner, randomWords[0]);
     }
 
-    /// @notice Get details of a random request
-    /// @param sequenceNum The sequence number of the request
-    /// @return request The request details
-    function getRequest(uint64 sequenceNum) external view returns (RandomRequest memory request) {
-        return pendingRequests[sequenceNum];
+    // -------------------- View Functions --------------------
+
+    /// @notice Get the winner for a fulfilled request
+    /// @param requestId The VRF request ID
+    /// @return winner The selected winner address
+    function getWinner(uint256 requestId) external view returns (address winner) {
+        if (requests[requestId].requester == address(0)) revert RequestNotFound(requestId);
+        if (!requests[requestId].fulfilled) revert RequestAlreadyFulfilled(requestId);
+        return winners[requestId];
     }
 
     /// @notice Check if a request has been fulfilled
-    /// @param sequenceNum The sequence number of the request
+    /// @param requestId The VRF request ID
     /// @return fulfilled Whether the request has been fulfilled
-    function isRequestFulfilled(uint64 sequenceNum) external view returns (bool fulfilled) {
-        return pendingRequests[sequenceNum].fulfilled;
+    function isRequestFulfilled(uint256 requestId) external view returns (bool fulfilled) {
+        return requests[requestId].fulfilled;
     }
 
-    /// @notice Withdraw contract balance (owner only)
-    function withdraw() external onlyOwner {
-        payable(owner()).transfer(address(this).balance);
+    /// @notice Get request details
+    /// @param requestId The VRF request ID
+    function getRequest(uint256 requestId)
+        external
+        view
+        returns (
+            address[] memory participants,
+            address requester,
+            bool fulfilled,
+            uint256 randomWord
+        )
+    {
+        RandomRequest storage request = requests[requestId];
+        return (
+            request.participants,
+            request.requester,
+            request.fulfilled,
+            request.randomWord
+        );
     }
 
-    /// @notice Fallback function to receive ETH
-    receive() external payable {}
+    /// @notice Preview random winner selection (for testing only - NOT SECURE)
+    /// @param participants Array of participant addresses
+    /// @return Simulated winner address
+    function previewRandomWinner(address[] memory participants) 
+        external 
+        view 
+        returns (address) 
+    {
+        if (participants.length == 0) revert NoParticipants();
+
+        // Use pseudo-random for preview only (NOT SECURE - for testing only)
+        uint256 pseudoRandom = uint256(
+            keccak256(
+                abi.encodePacked(
+                    block.timestamp,
+                    block.prevrandao,
+                    block.number,
+                    msg.sender
+                )
+            )
+        );
+
+        uint256 winnerIndex = pseudoRandom % participants.length;
+        return participants[winnerIndex];
+    }
+
+    /// @notice Get current VRF configuration
+    function getVRFConfig()
+        external
+        view
+        returns (
+            uint256 _subscriptionId,
+            bytes32 _keyHash,
+            uint32 _callbackGasLimit,
+            uint16 _requestConfirmations,
+            uint32 _numWords
+        )
+    {
+        return (
+            subscriptionId,
+            keyHash,
+            callbackGasLimit,
+            requestConfirmations,
+            numWords
+        );
+    }
 }
+
+
+// VRF Co-ordinator 0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE
+//s subscriptionID 95752933549638834563839661591035044483666769954218493417379908663541208911115
+// KeyHash 0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71
+// deployed address on base sepolia : 0x79b507aDC6aBE9B81Dd4BA3340514e455693423b
