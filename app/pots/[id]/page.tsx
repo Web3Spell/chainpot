@@ -13,15 +13,14 @@ export default function PotDetailsPage() {
   const params = useParams();
   const potId = params.id as string;
   const { isDarkMode } = useTheme();
-  const isCreator = true; // Mock - would come from contract/wallet check
 
   return (
     <main className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-black' : 'bg-gradient-to-br from-purple-100 via-purple-50 to-purple-200'}`}>
       <Navbar isDarkMode={isDarkMode} />
       <div className={`px-6 md:px-12 py-8 max-w-7xl mx-auto ${isDarkMode ? 'text-white' : 'text-black'}`}>
-        <PotHeader potId={potId} isDarkMode={isDarkMode} isCreator={isCreator} />
+        <PotHeader potId={potId} isDarkMode={isDarkMode} />
         <PotStats potId={potId} isDarkMode={isDarkMode} />
-        <CurrentCycle potId={potId} isDarkMode={isDarkMode} isCreator={isCreator} />
+        <CurrentCycle potId={potId} isDarkMode={isDarkMode}  />
         <BiddingSection potId={potId} isDarkMode={isDarkMode} />
         <CycleHistory potId={potId} isDarkMode={isDarkMode} />
       </div>

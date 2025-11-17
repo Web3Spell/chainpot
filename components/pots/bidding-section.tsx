@@ -76,10 +76,10 @@ export function BiddingSection({ potId, isDarkMode }: BiddingSectionProps) {
 
   const {
     placeBid,
-    hash: bidHash,
     isPending: isBidSigning,
     error: bidError,
   } = usePlaceBid();
+  const bidHash = undefined; // usePlaceBid does not return hash
 
   const { data: allowance, refetch: refetchAllowance } = useUSDCAllowance(
     address as `0x${string}`,

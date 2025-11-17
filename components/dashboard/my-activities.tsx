@@ -86,7 +86,7 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
   });
 
   // user events (JoinedPot, LeftPot, MemberPaidForCycle, BidPlaced, ParticipationUpdated)
-  const { data: events = [], isLoading: isEventsLoading } = useUserActivityEvents(userAddress ?? ('0x0000000000000000000000000000000000000000' as `0x${string}`));
+  const { events = [], isLoading: isEventsLoading } = useUserActivityEvents(userAddress ?? ('0x0000000000000000000000000000000000000000' as `0x${string}`));
 
   // usdc decimals (for formatting contributions)
   const { data: usdcDecimalsData } = useUSDCDecimals?.();

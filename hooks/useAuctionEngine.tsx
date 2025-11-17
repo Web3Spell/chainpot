@@ -201,7 +201,7 @@ import {
   };
   
   export const useJoinPot = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    const { writeContract, isPending, error, data:hash } = useWriteContract();
   
     const joinPot = (potId: bigint) =>
       writeContract({
@@ -211,7 +211,7 @@ import {
         args: [potId],
       });
   
-    return { joinPot, isPending, error };
+    return { joinPot, isPending, error, hash};
   };
   
   export const useLeavePot = () => {
@@ -299,7 +299,8 @@ import {
   };
   
   export const useStartCycle = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    // Destructure 'data' which contains the transaction hash (TxHash)
+    const { writeContract, isPending, error, data: hash } = useWriteContract();
   
     const startCycle = (potId: bigint) =>
       writeContract({
@@ -309,9 +310,9 @@ import {
         args: [potId],
       });
   
-    return { startCycle, isPending, error };
+    // Return the hash (aliased from data) along with the other properties
+    return { startCycle, isPending, error, hash };
   };
-  
   // Admin functions
   export const usePause = () => {
     const { writeContract, isPending, error } = useWriteContract();
