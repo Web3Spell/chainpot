@@ -4,8 +4,6 @@ import * as React from 'react';
 import { WagmiProvider } from 'wagmi';
 import {
   RainbowKitProvider,
-  getDefaultWallets,
-  connectorsForWallets,
   lightTheme,
 } from '@rainbow-me/rainbowkit';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

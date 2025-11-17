@@ -139,7 +139,7 @@ import {
   export const useRegisterMember = () => {
     const { writeContract, isPending, error } = useWriteContract();
   
-    const registerMember = (user: `0x${string}`) =>
+    const registerMember = ( user: `0x${string}`) =>
       writeContract({
         address: ADDRESS,
         abi: ABI,

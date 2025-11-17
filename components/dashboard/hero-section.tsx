@@ -21,6 +21,7 @@ interface HeroSectionProps {
   
         {/* CTA Buttons */}
         <div className="flex flex-wrap gap-4 pt-4 max-w-md">
+          <a href="/pots/create/">
           <button className={`px-8 py-3 rounded-full font-semibold text-sm transition-colors whitespace-nowrap ${
             isDarkMode
               ? 'bg-white text-black hover:bg-white/90'
@@ -28,6 +29,8 @@ interface HeroSectionProps {
           }`}>
             Create Pool
           </button>
+          </a>
+          <a href="/pots">
           <button className={`px-8 py-3 rounded-full font-semibold text-sm transition-colors whitespace-nowrap border-2 ${
             isDarkMode
               ? 'bg-transparent border-white text-white hover:bg-white/10'
@@ -35,6 +38,7 @@ interface HeroSectionProps {
           }`}>
             Join Pool
           </button>
+          </a>
         </div>
       </section>
     );

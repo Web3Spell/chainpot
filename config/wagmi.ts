@@ -1,6 +1,6 @@
 import { createConfig, http } from 'wagmi';
 
-import { mainnet, polygon, optimism, arbitrum, base } from 'wagmi/chains';
+import { mainnet, polygon, optimism, arbitrum, base, rootstockTestnet, baseSepolia } from 'wagmi/chains';
 
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 
@@ -20,7 +20,7 @@ if (!projectId) {
 
 // 2. Configure the chains you want to support
 
-const chains = [mainnet, polygon, optimism, arbitrum, base] as const;
+const chains = [baseSepolia] as const;
 
 
 

@@ -88,7 +88,7 @@ export function PotCard({ pot, isDarkMode }: PotCardProps) {
           {pot.cyclesComplete} cycles completed
         </p>
         <button
-          className={`w-full mr-2 ml-[34px] py-3 rounded-full text-sm font-semibold transition-colors ${
+          className={`w-full mr-2 ml-[4px] py-3 rounded-full text-sm font-semibold transition-colors ${
             isDarkMode
               ? 'bg-white text-black hover:bg-white/90'
               : 'bg-black text-white hover:bg-black/90'
