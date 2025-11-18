@@ -5,8 +5,8 @@ import { Address } from "viem";
 // -------------------------
 export const CONTRACT_ADDRESSES = {
     memberAccountManager:
-    "0x56165E19dc4af50079C1C92A7496874083e71d2E" as Address,
-    auctionEngine: "0xEc5D1De2Aa42b2A99fA74609d01E1D3d95595eEA" as Address,
+    "0xcf8490422C21F1392BEA53C4dc5ce939ce0169d1" as Address,
+    auctionEngine: "0x43C3F0Ad0c66A94a3b311F62b0254E9aDf46C735" as Address,
     
 };
 
