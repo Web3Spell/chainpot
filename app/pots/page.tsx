@@ -6,6 +6,7 @@ import { PotsGrid } from '@/components/pots/pots-grid';
 import { useTheme } from '@/providers/theme-provider';
 
 export default function PotsPage() {
+  
   const { isDarkMode } = useTheme();
 
   return (

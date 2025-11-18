@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 // Assume the following imports from your custom hooks file:
@@ -30,6 +30,56 @@ interface FormData {
   maxMembers: string;
 }
 
+// -------------------------
+// Form Input Component (moved outside to prevent re-creation)
+// -------------------------
+interface FormInputProps {
+  label: string;
+  name: keyof FormData;
+  type?: string;
+  placeholder?: string;
+  value: string;
+  onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
+  error?: string;
+  isDarkMode: boolean;
+}
+
+const FormInput = memo(({
+  label,
+  name,
+  type = 'text',
+  placeholder,
+  value,
+  onChange,
+  error,
+  isDarkMode,
+}: FormInputProps) => (
+  <div className="flex flex-col gap-2">
+    <label className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>
+      {label}
+    </label>
+    <input
+      type={type}
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={`px-4 py-3 rounded-lg border-2 transition-colors duration-300 ${
+        error
+          ? isDarkMode
+            ? 'border-red-500/50 bg-red-500/10'
+            : 'border-red-500 bg-red-50'
+          : isDarkMode
+          ? ' text-white bg-white/5'
+          : 'bg-white border-black text-black hover:bg-black/5'
+      } focus:outline-none`}
+    />
+    {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
+  </div>
+));
+
+FormInput.displayName = 'FormInput';
+
 export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
   const router = useRouter();
 
@@ -55,7 +105,8 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
   const { 
     createPot: sendCreatePotTransaction, // The function that triggers the write
     isPending: isWritePending,           // True while waiting for wallet confirmation
-    error: writeError                    // Error from wallet interaction/simulation
+    error: writeError,                   // Error from wallet interaction/simulation
+    hash: writeHash                      // Transaction hash from writeContract
   } = useCreatePot();
   
   const { data: currentPotCount, refetch: refetchPotCount } = useGetCurrentPotCount();
@@ -73,11 +124,21 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
   });
 
   // ------------------------------------------------------------------
+  // 🧭 Effect to Handle Transaction Hash from writeContract 🧭
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    // When writeContract succeeds, it sets the hash in the hook's data
+    if (writeHash) {
+      setTxHash(writeHash);
+    }
+  }, [writeHash]);
+
+  // ------------------------------------------------------------------
   // 🧭 Effect to Handle Transaction Status, Errors, and Redirection 🧭
   // ------------------------------------------------------------------
   useEffect(() => {
     // 1. Transaction Successfully Confirmed (Success)
-    if (isConfirmed) {
+    if (isConfirmed && txHash) {
       setIsSubmitting(false);
       
       // Refetch and redirect to the new pot page
@@ -89,7 +150,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
             : '';
 
         if (potId) {
-            router.push(`/pots/${potId}`);
+            router.push(`/pots/${String(BigInt(potId) + BigInt(1))}`);
             return;
         }
         router.push('/pots'); // Fallback
@@ -102,17 +163,16 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
         const errorMessage = error?.message || 'Transaction failed or was rejected.';
         console.error('Pot creation error:', error);
         
-        // Alert user about the failure
-        alert(`Transaction Failed: ${errorMessage.substring(0, 100)}...`);
-        
-        // Reset states
+        // Reset states first to update UI immediately
         setTxHash(undefined);
         setIsSubmitting(false);
         
-        // Redirect to home page
-        router.push('/');
+        // Alert user about the failure
+        alert(`Transaction Failed: ${errorMessage.substring(0, 100)}...`);
+        
+        // Don't redirect automatically - let user stay on form to retry
     }
-  }, [isConfirmed, writeError, confirmationError, router, refetchPotCount, currentPotCount]);
+  }, [isConfirmed, writeError, confirmationError, router, refetchPotCount, currentPotCount, txHash]);
 
   // -------------------------
   // Helpers & Validation
@@ -156,7 +216,8 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
     }
   };
 
-  // Use Viem's parseUnits
+  // Convert amount string to token units (e.g., "1000" USDC with 6 decimals = 1000000000)
+  // Uses Viem's parseUnits which handles decimal conversion correctly
   const toTokenUnits = (amountStr: string, decimals: number): bigint => {
     try {
       if (!amountStr || parseFloat(amountStr) <= 0) return BigInt(0);
@@ -173,24 +234,36 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
     e.preventDefault();
     if (!validateForm() || isSubmitting || isWritePending) return;
 
-    // Start the submission process
+    // Start the submission process - clear previous state
     setTxHash(undefined);
     setIsSubmitting(true);
+    // Clear any previous errors by resetting form errors
+    setErrors({});
 
     try {
       // Prepare arguments
       const name = formData.name.trim();
+      
+      // Convert amount to USDC with 6 decimals
       const amountPerCycle = toTokenUnits(formData.amountPerCycle, decimals); 
-      const cycleDuration = BigInt(Math.floor(parseFloat(formData.cycleDuration))); 
+      
+      // Convert cycle duration from days to seconds (days * 24 * 60 * 60 = 86400)
+      const cycleDurationDays = parseFloat(formData.cycleDuration);
+      const cycleDuration = BigInt(Math.floor(cycleDurationDays * 86400)); 
+      
       const cycleCount = BigInt(parseInt(formData.cycleCount, 10)); 
       const frequency = frequencyToIndex(formData.frequency); 
-      const bidDepositDeadline = BigInt(Math.floor(parseFloat(formData.bidDepositDeadline))); 
+      
+      // Convert bid deposit deadline from days to seconds (days * 24 * 60 * 60 = 86400)
+      const bidDeadlineDays = parseFloat(formData.bidDepositDeadline);
+      const bidDepositDeadline = BigInt(Math.floor(bidDeadlineDays * 86400)); 
+      
       const minMembers = BigInt(parseInt(formData.minMembers, 10)); 
       const maxMembers = BigInt(parseInt(formData.maxMembers, 10)); 
 
-      // Call your imperative write function. It must return a response object 
-      // containing the transaction hash for the useEffect hook to track confirmation.
-      const txResponse: any = await sendCreatePotTransaction(
+      // Call writeContract - it returns a promise that resolves to the transaction hash
+      // The hash will also be available in the hook's 'hash' property via useEffect
+      await sendCreatePotTransaction(
         name,
         amountPerCycle,
         cycleDuration,
@@ -201,73 +274,27 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
         maxMembers
       );
       
-      // Assuming your hook's write function returns an object with the hash property
-      if (txResponse && txResponse.hash) {
-          setTxHash(txResponse.hash as `0x${string}`);
-      } else {
-          // If the wallet signs successfully but doesn't immediately return hash,
-          // the writeError in useEffect will eventually catch any failure.
-          // We rely on isWritePending state here.
-      }
+      // Note: The transaction hash will be set via useEffect when writeHash updates
+      // No need to manually set it here
 
     } catch (err: any) {
       // Catch errors during the hook call/wallet interaction setup
       console.error('Transaction initiation failed:', err);
       const errorMsg = err?.message || 'Transaction initiation failed';
-      alert(`Transaction Failed: ${errorMsg.substring(0, 100)}...`);
+      
+      // Reset states immediately to update UI
       setIsSubmitting(false);
-      router.push('/');
+      setTxHash(undefined);
+      
+      // Show error to user
+      alert(`Transaction Failed: ${errorMsg.substring(0, 100)}...`);
+      
+      // Don't redirect - let user stay on form to retry
     }
-    // isSubmitting state is now controlled by the useEffect hook watching wagmi states.
   };
   
   // Aggregate submission state for UI
   const isCurrentlySubmitting = isSubmitting || isConfirming;
-
-
-  // -------------------------
-  // Form Input Component
-  // -------------------------
-  const FormInput = ({
-    label,
-    name,
-    type = 'text',
-    placeholder,
-    value,
-    onChange,
-    error,
-  }: {
-    label: string;
-    name: keyof FormData;
-    type?: string;
-    placeholder?: string;
-    value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void | ((e: React.ChangeEvent<HTMLSelectElement>) => void);
-    error?: string;
-  }) => (
-    <div className="flex flex-col gap-2">
-      <label className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>
-        {label}
-      </label>
-      <input
-        type={type}
-        name={name}
-        value={value}
-        onChange={onChange as any}
-        placeholder={placeholder}
-        className={`px-4 py-3 rounded-lg border-2 transition-colors duration-300 ${
-          error
-            ? isDarkMode
-              ? 'border-red-500/50 bg-red-500/10'
-              : 'border-red-500 bg-red-50'
-            : isDarkMode
-            ? ' text-white bg-white/5'
-            : 'bg-white border-black text-black hover:bg-black/5'
-        } focus:outline-none`}
-      />
-      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
-    </div>
-  );
 
   // -------------------------
   // 🎨 Render JSX 🎨
@@ -302,6 +329,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
               value={formData.name}
               onChange={handleChange}
               error={errors.name}
+              isDarkMode={isDarkMode}
             />
           </div>
         </div>
@@ -320,6 +348,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
               value={formData.amountPerCycle}
               onChange={handleChange}
               error={errors.amountPerCycle}
+              isDarkMode={isDarkMode}
             />
             <FormInput
               label="Bid Deposit Deadline (days)"
@@ -329,6 +358,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
               value={formData.bidDepositDeadline}
               onChange={handleChange}
               error={errors.bidDepositDeadline}
+              isDarkMode={isDarkMode}
             />
           </div>
         </div>
@@ -347,6 +377,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
               value={formData.cycleDuration}
               onChange={handleChange}
               error={errors.cycleDuration}
+              isDarkMode={isDarkMode}
             />
             <FormInput
               label="Total Cycles"
@@ -356,6 +387,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
               value={formData.cycleCount}
               onChange={handleChange}
               error={errors.cycleCount}
+              isDarkMode={isDarkMode}
             />
             <div className="flex flex-col gap-2">
               <label className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>
@@ -391,6 +423,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
               value={formData.minMembers}
               onChange={handleChange}
               error={errors.minMembers}
+              isDarkMode={isDarkMode}
             />
             <FormInput
               label="Maximum Members"
@@ -400,16 +433,32 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
               value={formData.maxMembers}
               onChange={handleChange}
               error={errors.maxMembers}
+              isDarkMode={isDarkMode}
             />
           </div>
         </div>
 
+        {/* Error Display */}
+        {(writeError || confirmationError) && (
+          <div className="mb-4 p-4 rounded-lg bg-red-500/10 border-2 border-red-500/50">
+            <p className="text-sm font-bold text-red-500 mb-1">Transaction Error</p>
+            <p className="text-xs text-red-400">
+              {(writeError || confirmationError)?.message || 'Transaction failed or was rejected.'}
+            </p>
+          </div>
+        )}
+
         {/* Footer: show tx hash + submitting spinner */}
         {txHash && (
-          <div className="mb-4 text-sm text-white/80">
+          <div className={`mb-4 text-sm ${isDarkMode ? 'text-white/80' : 'text-gray-700'}`}>
             {isConfirming ? 'Confirming transaction' : 'Transaction sent'}: 
-            <a className="underline ml-1" target="_blank" href={`https://etherscan.io/tx/${txHash}`}>
-              {txHash}
+            <a 
+              className="underline ml-1 hover:opacity-80" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              href={`https://etherscan.io/tx/${txHash}`}
+            >
+              {txHash.slice(0, 10)}...{txHash.slice(-8)}
             </a>
           </div>
         )}
@@ -420,16 +469,23 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
             type="submit"
             disabled={isCurrentlySubmitting || isWritePending} 
             className={`flex-1 px-8 py-3 rounded-full font-bold text-lg transition-all duration-300 ${
-              isDarkMode
+              isCurrentlySubmitting || isWritePending
+                ? 'opacity-50 cursor-not-allowed'
+                : isDarkMode
                 ? 'bg-white text-black hover:bg-white/90'
                 : 'bg-black text-white hover:bg-black/90'
             }`}
           >
-            {isWritePending ? 'Waiting for Wallet...' : isConfirming ? (
-                <div className="flex items-center justify-center gap-2">
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    Confirming...
-                </div>
+            {isWritePending ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                Waiting for Wallet...
+              </div>
+            ) : isConfirming ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                Confirming...
+              </div>
             ) : (
               'Create Pot'
             )}

@@ -169,7 +169,8 @@ import {
   // =====================================================
   
   export const useCreatePot = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    // Destructure 'data' which contains the transaction hash (TxHash)
+    const { writeContract, isPending, error, data: hash } = useWriteContract();
   
     const createPot = (
       name: string,
@@ -197,7 +198,8 @@ import {
         ],
       });
   
-    return { createPot, isPending, error };
+    // Return the hash (aliased from data) along with the other properties
+    return { createPot, isPending, error, hash };
   };
   
   export const useJoinPot = () => {
@@ -229,7 +231,8 @@ import {
   };
   
   export const usePayForCycle = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    // Destructure 'data' which contains the transaction hash (TxHash)
+    const { writeContract, isPending, error, data: hash } = useWriteContract();
   
     const payForCycle = (cycleId: bigint) =>
       writeContract({
@@ -239,11 +242,13 @@ import {
         args: [cycleId],
       });
   
-    return { payForCycle, isPending, error };
+    // Return the hash (aliased from data) along with the other properties
+    return { payForCycle, isPending, error, hash };
   };
   
   export const usePlaceBid = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    // Destructure 'data' which contains the transaction hash (TxHash)
+    const { writeContract, isPending, error, data: hash } = useWriteContract();
   
     const placeBid = (cycleId: bigint, bidAmount: bigint) =>
       writeContract({
@@ -253,11 +258,12 @@ import {
         args: [cycleId, bidAmount],
       });
   
-    return { placeBid, isPending, error };
+    // Return the hash (aliased from data) along with the other properties
+    return { placeBid, isPending, error, hash };
   };
   
   export const useCloseBidding = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    const { writeContract, isPending, error, data: hash } = useWriteContract();
   
     const closeBidding = (cycleId: bigint) =>
       writeContract({
@@ -267,11 +273,11 @@ import {
         args: [cycleId],
       });
   
-    return { closeBidding, isPending, error };
+    return { closeBidding, isPending, error, hash };
   };
   
   export const useDeclareWinner = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    const { writeContract, isPending, error, data: hash } = useWriteContract();
   
     const declareWinner = (cycleId: bigint) =>
       writeContract({
@@ -281,11 +287,11 @@ import {
         args: [cycleId],
       });
   
-    return { declareWinner, isPending, error };
+    return { declareWinner, isPending, error, hash };
   };
   
   export const useCompleteCycle = () => {
-    const { writeContract, isPending, error } = useWriteContract();
+    const { writeContract, isPending, error, data: hash } = useWriteContract();
   
     const completeCycle = (cycleId: bigint) =>
       writeContract({
@@ -295,7 +301,7 @@ import {
         args: [cycleId],
       });
   
-    return { completeCycle, isPending, error };
+    return { completeCycle, isPending, error, hash };
   };
   
   export const useStartCycle = () => {

@@ -95,7 +95,7 @@ function PotItem({ id, isDarkMode }: { id: number; isDarkMode: boolean }) {
   // We will try to safely handle BigInt/BigNumber/number types
   const amountPerCycleNum = bigIntToNumberSafe(amountPerCycleRaw, 0);
   const cycleCountNum = bigIntToNumberSafe(cycleCountRaw, 0);
-  const totalAmountNumber = amountPerCycleNum * cycleCountNum;
+  const totalAmountNumber = (amountPerCycleNum * cycleCountNum) / 1000000;
 
   // Format total amount - this is naive (no decimals) but safe; replace with token-decimal aware formatter if needed
   const totalAmount = `$${Number.isFinite(totalAmountNumber) ? totalAmountNumber.toLocaleString() : bigIntToStringSafe(amountPerCycleRaw)}`;

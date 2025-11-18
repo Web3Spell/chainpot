@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
 import Link from 'next/link';
+import { useMemo } from 'react';
+import { usePathname } from 'next/navigation';
 import { useTheme } from '@/providers/theme-provider';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
@@ -11,9 +12,10 @@ interface NavbarProps {
 }
 
 export function Navbar({ isDarkMode }: NavbarProps) {
-  const [activeNav, setActiveNav] = useState('dashboard');
   const { toggleTheme } = useTheme();
-  const {isConnected} = useAccount()
+  const { isConnected } = useAccount();
+  const pathname = usePathname();
+
   const navItems = [
     { id: 'home', label: 'Home', href: '/' },
     { id: 'dashboard', label: 'Dashboard', href: '/dashboard' },
@@ -35,24 +37,32 @@ export function Navbar({ isDarkMode }: NavbarProps) {
 
         {/* Navigation */}
         <nav className={`hidden md:flex items-center gap-1 px-6 py-2 rounded-full ${isDarkMode ? 'bg-white/10 border border-white/20' : 'bg-white/80 border border-black/20'}`}>
-          {navItems.map((item) => (
-            <Link
-              key={item.id}
-              href={item.href}
-              onClick={() => setActiveNav(item.id)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
-                activeNav === item.id
-                  ? isDarkMode
-                    ? 'bg-white/20 text-white shadow-sm'
-                    : 'bg-white text-black shadow-sm'
-                  : isDarkMode
-                  ? 'text-white/70 hover:text-white'
-                  : 'text-black/70 hover:text-black'
-              }`}
-            >
-              {item.label}
-            </Link>
-          ))}
+          {navItems.map((item) => {
+            const isActive =
+              item.href === '/'
+                ? pathname === '/'
+                : pathname?.startsWith(item.href);
+
+            const activeClasses = isDarkMode
+              ? 'bg-white/20 text-white shadow-sm'
+              : 'bg-white text-black shadow-sm';
+
+            const inactiveClasses = isDarkMode
+              ? 'text-white/70 hover:text-white'
+              : 'text-black/70 hover:text-black';
+
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 ${
+                  isActive ? activeClasses : inactiveClasses
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
 
         {/* Right side actions */}

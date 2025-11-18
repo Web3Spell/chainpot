@@ -8,6 +8,9 @@ interface CycleHistoryProps {
   isDarkMode: boolean;
 }
 
+// Maximum number of cycles to fetch (ensures stable hook order)
+const MAX_CYCLES = 50;
+
 export function CycleHistory({ potId, isDarkMode }: CycleHistoryProps) {
   /** Convert potId -> bigint */
   const potIdBig = useMemo(() => {
@@ -25,33 +28,49 @@ export function CycleHistory({ potId, isDarkMode }: CycleHistoryProps) {
 
   const cycleIds = useMemo(() => {
     if (!potInfo) return [];
-    return potInfo[10] as bigint[]; // ✔️ cycleIds array index
+    const raw = potInfo[10] as bigint[];
+    if (!Array.isArray(raw)) return [];
+    return raw.slice(0, MAX_CYCLES); // Limit to MAX_CYCLES
   }, [potInfo]);
 
   /** ------------------------------
-   * 2. Fetch all cycles
+   * 2. Create stable array of cycle IDs (fixed size for stable hooks)
    * ------------------------------ */
-  const cycleQueries = cycleIds.map((cycleId) =>
+  const stableCycleIds = useMemo(() => {
+    const stable: bigint[] = [];
+    for (let i = 0; i < MAX_CYCLES; i++) {
+      stable.push(cycleIds[i] ?? BigInt(0));
+    }
+    return stable;
+  }, [cycleIds]);
+
+  /** ------------------------------
+   * 3. Fetch all cycles (fixed number of hooks for stable order)
+   * ------------------------------ */
+  const cycleQueries = stableCycleIds.map((cycleId) =>
     useGetCycleInfo(cycleId)
   );
 
-  const cycles = cycleQueries
-    .map((q, idx) => {
-      if (!q.data) return null;
+  const cycles = useMemo(() => {
+    return cycleQueries
+      .map((q, idx) => {
+        // Skip if cycleId is 0 (placeholder) or no data
+        if (stableCycleIds[idx] === BigInt(0) || !q.data) return null;
 
-      const data = q.data;
-      const cycleId = cycleIds[idx];
+        const data = q.data;
+        const cycleId = stableCycleIds[idx];
 
-      return {
-        number: Number(cycleId),
-        winner: data[3],
-        winningBid: data[4],
-        startTime: Number(data[1]),
-        endTime: Number(data[2]),
-        participants: Number(data[6]),
-      };
-    })
-    .filter(Boolean);
+        return {
+          number: Number(cycleId),
+          winner: data[3],
+          winningBid: data[4],
+          startTime: Number(data[1]),
+          endTime: Number(data[2]),
+          participants: Number(data[6]),
+        };
+      })
+      .filter((cycle): cycle is NonNullable<typeof cycle> => cycle !== null);
+  }, [cycleQueries, stableCycleIds]);
 
   /** ------------------------------
    * Helper to format USDC values
