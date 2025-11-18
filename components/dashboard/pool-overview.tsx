@@ -225,7 +225,7 @@ export function PoolOverview({ isDarkMode }: PoolOverviewProps) {
               </div>
               <div className="flex justify-between">
                 <span className={isDarkMode ? 'text-white/70' : 'text-black/70'}>Yield Rate</span>
-                <span className={`font-semibold ${isDarkMode ? 'text-emerald-400' : 'text-green-600'}`}>{pool.yieldRate}</span>
+                <span className={`font-semibold ${isDarkMode ? 'text-emerald-400' : 'text-green-600'}`}>{((Number(pool.yieldRate) / 10000))}%</span>
               </div>
             </div>
 
