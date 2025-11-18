@@ -9,6 +9,7 @@ import { motion, useAnimation } from 'framer-motion';
 import { clashDisplaySemibold } from './ui/fonts';
 
 import { useIsRegistered, useRegisterMember } from '@/hooks/useMemberManagerAccount';
+import Image from 'next/image';
 
 export default function Home() {
   const router = useRouter();
@@ -250,17 +251,9 @@ export default function Home() {
             className="flex items-center gap-3 group cursor-pointer"
           >
             <motion.div
-              animate={{
-                rotate: [0, 360],
-              }}
-              transition={{
-                duration: 20,
-                repeat: Infinity,
-                ease: 'linear',
-              }}
-              className="w-10 h-10 rounded-full bg-white/10 border border-white/20 flex items-center justify-center"
+              className=" flex items-center justify-center"
             >
-              <span className="text-white font-bold text-lg">⛓</span>
+              <span className="text-white font-bold text-lg"><Image src="/images/logo-white.svg" alt="ChainPot" width={30} height={30} /></span>
             </motion.div>
             <span className={`text-white text-2xl tracking-tight ${clashDisplaySemibold.className}`}>
               ChainPot

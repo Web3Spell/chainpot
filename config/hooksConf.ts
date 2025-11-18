@@ -7,6 +7,10 @@ export const CONTRACT_ADDRESSES = {
     memberAccountManager:
     "0xcf8490422C21F1392BEA53C4dc5ce939ce0169d1" as Address,
     auctionEngine: "0x43C3F0Ad0c66A94a3b311F62b0254E9aDf46C735" as Address,
+    lottery: "0x42D6bf04129da6Cf84BCF13FcC810f698D1211d0" as Address,
+    escrow: "0x5121810C9213762F55fE22fd87FA117f2c41567D" as Address,
+    compoundV3Integrator: "0x1Fb760c83C2612802B79c35b06596f6D7681e92a" as Address,
+    usdc_token: "0x036cbd53842c5426634e7929541ec2318f3dcf7e" as Address,
     
 };
 

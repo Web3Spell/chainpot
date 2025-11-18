@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useTheme } from '@/providers/theme-provider';
 import { useAccount } from 'wagmi';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
+import Image from 'next/image';
 
 interface NavbarProps {
   isDarkMode: boolean;
@@ -29,8 +30,8 @@ export function Navbar({ isDarkMode }: NavbarProps) {
       <div className="px-6 md:px-12 py-4 flex items-center justify-between max-w-7xl mx-auto">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-white' : 'bg-black'}`}>
-            <span className={`text-sm font-bold ${isDarkMode ? 'text-black' : 'text-white'}`}>⛓</span>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center bg-transparent`}>
+            <span className={`text-sm font-bold ${isDarkMode ? 'text-black' : 'text-white'}`}><Image src={`/images/logo-${isDarkMode ? 'white' : 'black'}.svg`} alt="ChainPot" width={30} height={30} /></span>
           </div>
           <span className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-black'}`}>ChainPot</span>
         </Link>
