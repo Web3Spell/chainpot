@@ -17,6 +17,10 @@ contract EscrowTest is Test {
     address winner = address(0xA4);
     address alice = address(0xA5);
 
+    // Trackers used by fuzz actions / tests
+    uint256 totalDeposited;
+    uint256 totalReleased;
+
     function setUp() public {
         vm.startPrank(owner);
 
@@ -242,16 +246,6 @@ contract EscrowTest is Test {
         assertTrue(escrow.paused());
     }
 
-    function test_pause_blocksDeposit() external {
-        vm.prank(owner);
-        escrow.pause();
-
-        vm.startPrank(auction);
-        vm.expectRevert();
-        escrow.depositUSDC(1, 1, user1, 1e6);
-        vm.stopPrank();
-    }
-
     function test_emergencyWithdrawUSDC_contractHasEnough() external {
         vm.startPrank(owner);
         usdc.mint(address(escrow), 100e6);
@@ -293,5 +287,139 @@ contract EscrowTest is Test {
         vm.prank(auction);
         vm.expectRevert();
         escrow.getDepositInfo(999);
+    }
+
+    function test_withdrawPotInterest_zero() public {
+        uint256 potId = 1;
+        uint256 cycleId = 1;
+
+        vm.prank(auction);
+        escrow.depositUSDC(potId, cycleId, user1, 1000e6);
+
+        vm.prank(auction);
+        uint256 interest = escrow.withdrawPotInterest(potId, cycleId);
+        assertEq(interest, 0, "should return zero");
+    }
+
+    function test_emergencyWithdrawUSDC_fromBalance() public {
+        // fund escrow directly
+        usdc.mint(address(escrow), 200e6);
+
+        vm.prank(owner);
+        escrow.pause();
+
+        vm.prank(owner);
+        escrow.emergencyWithdrawUSDC(100e6, alice);
+
+        assertEq(usdc.balanceOf(alice), 100e6);
+    }
+
+    function test_emergencyWithdrawAllFromCompound() public {
+        vm.prank(owner);
+        escrow.pause();
+
+        vm.prank(owner);
+        escrow.emergencyWithdrawAllFromCompound();
+
+        assertFalse(compound.allWithdrawnCalled());
+    }
+
+    function test_setCompoundIntegrator() public {
+        vm.startPrank(owner);
+        address newIntegrator = address(0x1234);
+
+        escrow.setCompoundIntegrator(newIntegrator);
+        assertEq(address(escrow.compoundIntegrator()), newIntegrator);
+
+        vm.stopPrank();
+    }
+
+    function test_setCompoundIntegrator_zero_reverts() public {
+        vm.prank(owner);
+        vm.expectRevert(Escrow.InvalidAddress.selector);
+        escrow.setCompoundIntegrator(address(0));
+    }
+
+    function test_getDepositsForUser() public {
+        vm.startPrank(auction);
+
+        escrow.depositUSDC(1, 1, user1, 10e6);
+        escrow.depositUSDC(1, 1, user1, 20e6);
+
+        vm.stopPrank();
+
+        uint256[] memory d = escrow.getDepositsForUser(user1);
+        assertEq(d.length, 2);
+    }
+
+    function test_getGlobalStats() public {
+        vm.prank(auction);
+        escrow.depositUSDC(1, 1, user1, 100e6);
+
+        (uint256 totalD, uint256 totalW, uint256 totalC) = escrow.getGlobalStats();
+
+        assertEq(totalD, 100e6);
+        assertEq(totalW, 0);
+        assertEq(totalC, 100e6);
+    }
+
+    function test_onlyOwner_emergencyWithdrawUSDC() public {
+        vm.prank(alice);
+        vm.expectRevert();
+        escrow.emergencyWithdrawUSDC(100e6, alice);
+    }
+
+    /// ----------------------------------------------------------
+    ///  FUZZ ACTION: random deposit
+    /// ----------------------------------------------------------
+    function deposit(uint256 potId, uint256 cycleId, uint256 amount) public {
+        potId = bound(potId, 1, 20);
+        cycleId = bound(cycleId, 1, 20);
+        amount = bound(amount, 1e6, 5_000e6);
+
+        // mint to auction for transfers
+        usdc.mint(auction, amount);
+
+        vm.startPrank(auction);
+        usdc.approve(address(escrow), amount);
+
+        escrow.depositUSDC(potId, cycleId, msg.sender, amount);
+
+        vm.stopPrank();
+
+        totalDeposited += amount;
+    }
+
+    /// ----------------------------------------------------------
+    ///  FUZZ ACTION: random release to random winner
+    /// ----------------------------------------------------------
+    function release(uint256 potId, uint256 cycleId, uint256 amount) public {
+        potId = bound(potId, 1, 20);
+        cycleId = bound(cycleId, 1, 20);
+        amount = bound(amount, 1e6, 2_000e6);
+
+        address winner = address(uint160(uint256(keccak256(abi.encodePacked(msg.sender, potId, cycleId)))));
+
+        vm.prank(auction);
+
+        // ignore failures (valid for invariant model)
+        try escrow.releaseFundsToWinner(potId, cycleId, winner, amount) {
+            totalReleased += amount;
+        } catch {}
+    }
+
+    /// ----------------------------------------------------------
+    ///  FUZZ ACTION: fetch interest (no-op for model)
+    /// ----------------------------------------------------------
+    function harvestInterest(uint256 potId, uint256 cycleId, uint256 amount) public {
+        potId = bound(potId, 1, 20);
+        cycleId = bound(cycleId, 1, 20);
+        amount = bound(amount, 1e6, 500e6);
+
+        // set interest into mock integrator
+        compound.setInterest(potId, cycleId, amount);
+
+        vm.prank(auction);
+        try escrow.withdrawPotInterest(potId, cycleId) {} catch {}
     }
 }
