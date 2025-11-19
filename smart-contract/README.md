@@ -193,6 +193,10 @@ await memberManager.addAuthorizedCaller(auctionEngine.address);
 - [ ] Oracle price manipulation protection
 - [ ] Integer overflow protection (Solidity 0.8+)
 
+## Testing Snapshot 
+<img width="1065" height="618" alt="Screenshot 2025-11-19 at 1 03 06 PM" src="https://github.com/user-attachments/assets/940ae5b5-efd3-4390-8ebc-42c99125db6c" />
+
+
 ### Known Limitations
 - Current ETH/USDC conversion is simulated (production needs DEX integration)
 - Chainlink price feed staleness checks implemented
