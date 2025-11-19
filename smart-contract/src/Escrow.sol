@@ -6,7 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {CompoundV3Integrator} from "./CompoundV3Integrator.sol";
+import {CompoundV3Integrator} from "./CompoundIntegrator.sol";
 
 /// @title Escrow - Manages all funds with proper tracking per pot/cycle
 /// @notice Holds member contributions, deposits to Compound, tracks interest
@@ -47,7 +47,7 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     }
 
     uint256 public depositCounter = 1;
-    
+
     mapping(uint256 => DepositInfo) public deposits;
     mapping(uint256 => uint256[]) public cycleDeposits; // cycleId => deposit IDs
     mapping(address => uint256[]) public userDeposits; // user => deposit IDs
@@ -74,11 +74,7 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
 
     // Events
     event FundsDeposited(
-        uint256 indexed depositId,
-        uint256 indexed potId,
-        uint256 indexed cycleId,
-        address depositor,
-        uint256 amount
+        uint256 indexed depositId, uint256 indexed potId, uint256 indexed cycleId, address depositor, uint256 amount
     );
     event FundsDepositedToCompound(uint256 indexed potId, uint256 indexed cycleId, uint256 amount);
     event FundsWithdrawn(uint256 indexed potId, uint256 indexed cycleId, address indexed recipient, uint256 amount);
@@ -96,8 +92,6 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
         USDC = IERC20(_usdc);
         compoundIntegrator = CompoundV3Integrator(_compoundIntegrator);
     }
-
-
 
     modifier onlyAuctionEngine() {
         if (msg.sender != auctionEngine) revert UnauthorizedCaller(msg.sender);
@@ -131,12 +125,12 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     /// @param cycleId The cycle identifier
     /// @param member The member making the deposit
     /// @param amount The USDC amount (6 decimals)
-    function depositUSDC(
-        uint256 potId,
-        uint256 cycleId,
-        address member,
-        uint256 amount
-    ) external onlyAuctionEngine whenNotPaused nonReentrant {
+    function depositUSDC(uint256 potId, uint256 cycleId, address member, uint256 amount)
+        external
+        onlyAuctionEngine
+        whenNotPaused
+        nonReentrant
+    {
         if (amount <= 0) revert InvalidAmount();
         if (member == address(0)) revert InvalidAddress();
         if (potId <= 0) revert InvalidPotId();
@@ -184,12 +178,12 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     /// @param cycleId The cycle identifier
     /// @param winner The winner's address
     /// @param amount The winning bid amount
-    function releaseFundsToWinner(
-        uint256 potId,
-        uint256 cycleId,
-        address winner,
-        uint256 amount
-    ) external onlyAuctionEngine whenNotPaused nonReentrant {
+    function releaseFundsToWinner(uint256 potId, uint256 cycleId, address winner, uint256 amount)
+        external
+        onlyAuctionEngine
+        whenNotPaused
+        nonReentrant
+    {
         if (amount <= 0) revert InvalidAmount();
         if (winner == address(0)) revert InvalidAddress();
 
@@ -221,10 +215,13 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     /// @param potId The pot identifier
     /// @param cycleId The cycle identifier
     /// @return interestAmount The total interest earned for this cycle
-    function withdrawPotInterest(
-        uint256 potId,
-        uint256 cycleId
-    ) external onlyAuctionEngine whenNotPaused nonReentrant returns (uint256 interestAmount) {
+    function withdrawPotInterest(uint256 potId, uint256 cycleId)
+        external
+        onlyAuctionEngine
+        whenNotPaused
+        nonReentrant
+        returns (uint256 interestAmount)
+    {
         PotFunds storage pot = potFunds[potId];
         CycleFunds storage cycle = pot.cycles[cycleId];
 
@@ -250,12 +247,12 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     /// @param cycleId The cycle identifier
     /// @param recipient The recipient address
     /// @param amount The interest amount to distribute
-    function withdrawInterest(
-        uint256 potId,
-        uint256 cycleId,
-        address recipient,
-        uint256 amount
-    ) external onlyAuctionEngine whenNotPaused nonReentrant {
+    function withdrawInterest(uint256 potId, uint256 cycleId, address recipient, uint256 amount)
+        external
+        onlyAuctionEngine
+        whenNotPaused
+        nonReentrant
+    {
         if (amount <= 0) revert InvalidAmount();
         if (recipient == address(0)) revert InvalidAddress();
 
@@ -282,17 +279,14 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     /// @notice Mark a cycle as completed
     /// @param potId The pot identifier
     /// @param cycleId The cycle identifier
-    function markCycleCompleted(
-        uint256 potId,
-        uint256 cycleId
-    ) external onlyAuctionEngine {
+    function markCycleCompleted(uint256 potId, uint256 cycleId) external onlyAuctionEngine {
         PotFunds storage pot = potFunds[potId];
         CycleFunds storage cycle = pot.cycles[cycleId];
 
         if (cycle.cycleCompleted) revert CycleAlreadyCompleted(potId, cycleId);
 
         cycle.cycleCompleted = true;
-        
+
         emit CycleCompleted(potId, cycleId);
     }
 
@@ -342,11 +336,11 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     }
 
     /// @notice Get member's contribution for a specific cycle
-    function getMemberCycleContribution(
-        uint256 potId,
-        uint256 cycleId,
-        address member
-    ) external view returns (uint256) {
+    function getMemberCycleContribution(uint256 potId, uint256 cycleId, address member)
+        external
+        view
+        returns (uint256)
+    {
         return potFunds[potId].cycles[cycleId].memberContributions[member];
     }
 
@@ -398,7 +392,7 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
 
         // Try to withdraw from contract balance first
         uint256 contractBalance = USDC.balanceOf(address(this));
-        
+
         if (contractBalance >= amount) {
             USDC.safeTransfer(to, amount);
         } else {
