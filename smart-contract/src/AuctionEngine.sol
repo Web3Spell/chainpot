@@ -34,6 +34,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
         Pending,
         Active,
         BiddingClosed,
+        AwaitingVRF,
         Completed
     }
 
@@ -77,6 +78,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
     mapping(uint256 => mapping(address => bool)) public hasJoinedPot;
     mapping(uint256 => mapping(address => bool)) public hasPaidForCycle; // potId => member => paid
     mapping(address => uint256[]) public userPots;
+    mapping(uint256 => uint256) public requestIdToCycle; // VRF requestId => cycleId
 
     // Constants
     uint256 public constant MIN_CYCLE_DURATION = 1 days;
@@ -122,6 +124,12 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
     error NotPaidForCycle();
     error BiddingAlreadyClosed();
     error InvalidUSDCAddress();
+    error VRFNotFulfilled();
+    error NotLotteryEngine();
+    error InvalidCycleStatus();
+    error WinnerAlreadySet();
+    error VRFRequestNotFound();
+    error InvalidAddress();
 
     // Events
     event PotCreated(uint256 indexed potId, string name, address indexed creator, uint256 amountPerCycle);
@@ -136,17 +144,18 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
     event BidRefunded(uint256 indexed cycleId, address indexed bidder, uint256 amount);
     event InterestDistributed(uint256 indexed cycleId, uint256 totalInterest);
     event PotStatusChanged(uint256 indexed potId, PotStatus status);
+    event VRFRequested(uint256 indexed cycleId, uint256 indexed requestId);
 
-    constructor(
-        address _usdc,
-        address _memberManager,
-        address _lotteryEngine,
-        address _escrow
-    ) Ownable(msg.sender) {
+    constructor(address _usdc, address _memberManager, address _lotteryEngine, address _escrow) Ownable(msg.sender) {
         if (_usdc == address(0)) revert InvalidUSDCAddress();
         if (_memberManager == address(0)) revert InvalidAmount();
         if (_lotteryEngine == address(0)) revert InvalidAmount();
         if (_escrow == address(0)) revert InvalidAmount();
+
+        // Verify contracts have code (except USDC which could be a token)
+        if (_memberManager.code.length == 0) revert InvalidAmount();
+        if (_lotteryEngine.code.length == 0) revert InvalidAmount();
+        if (_escrow.code.length == 0) revert InvalidAmount();
 
         USDC = IERC20(_usdc);
         memberManager = MemberAccountManager(_memberManager);
@@ -172,6 +181,11 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
 
     modifier validCycle(uint256 cycleId) {
         if (cycleId <= 0 || cycleId >= cycleCounter) revert InvalidCycle();
+        _;
+    }
+
+    modifier onlyLotteryEngine() {
+        if (msg.sender != address(lotteryEngine)) revert NotLotteryEngine();
         _;
     }
 
@@ -273,12 +287,12 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
     }
 
     /// @notice Start a new cycle - initializes the cycle (funds collected in payForCycle)
-    function startCycle(uint256 potId) 
-        external 
-        onlyPotCreator(potId) 
-        validPot(potId) 
-        whenNotPaused 
-        nonReentrant 
+    function startCycle(uint256 potId)
+        external
+        onlyPotCreator(potId)
+        validPot(potId)
+        whenNotPaused
+        nonReentrant
         returns (uint256)
     {
         Pot storage pot = chainPots[potId];
@@ -303,12 +317,7 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
 
     /// @notice Members pay their contribution for the cycle
     /// @dev This is called by each member to pay their share for the cycle
-    function payForCycle(uint256 cycleId) 
-        external  
-        validCycle(cycleId) 
-        whenNotPaused 
-        nonReentrant 
-    {
+    function payForCycle(uint256 cycleId) external validCycle(cycleId) whenNotPaused nonReentrant {
         AuctionCycle storage cycle = auctionCycles[cycleId];
         Pot storage pot = chainPots[cycle.potId];
 
@@ -364,27 +373,27 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
     }
 
     /// @notice Close bidding period
-    function closeBidding(uint256 cycleId) 
-        external 
-        onlyPotCreator(auctionCycles[cycleId].potId) 
+    function closeBidding(uint256 cycleId)
+        external
+        onlyPotCreator(auctionCycles[cycleId].potId)
         validCycle(cycleId)
         whenNotPaused
     {
         AuctionCycle storage cycle = auctionCycles[cycleId];
         Pot storage pot = chainPots[cycle.potId];
-        
+
         if (cycle.status != CycleStatus.Active) revert CycleNotActive();
         if (block.timestamp < cycle.endTime - pot.bidDepositDeadline) revert TooEarlyToClose();
 
         cycle.status = CycleStatus.BiddingClosed;
-        
+
         emit BiddingClosed(cycleId, block.timestamp);
     }
 
     /// @notice Declare winner - either lowest bidder or lottery winner
-    function declareWinner(uint256 cycleId) 
-        external 
-        onlyPotCreator(auctionCycles[cycleId].potId) 
+    function declareWinner(uint256 cycleId)
+        external
+        onlyPotCreator(auctionCycles[cycleId].potId)
         validCycle(cycleId)
         whenNotPaused
         returns (address winner)
@@ -396,13 +405,19 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
 
         if (cycle.bidders.length() == 0) {
             // No bids - use lottery via Chainlink VRF
-            uint requestId = lotteryEngine.requestRandomWinner(pot.members);
+            uint256 requestId = lotteryEngine.requestRandomWinner(pot.members);
             cycle.vrfRequestId = uint64(requestId);
-            
-            // Winner will be set via callback (see fulfillRandomWinner)
-            // For now, use preview for immediate testing
-            cycle.winner = lotteryEngine.previewRandomWinner(pot.members);
-            cycle.winningBid = pot.amountPerCycle;
+
+            // Store mapping for callback
+            requestIdToCycle[requestId] = cycleId;
+
+            // Set status to AwaitingVRF - winner will be set via callback
+            cycle.status = CycleStatus.AwaitingVRF;
+
+            emit VRFRequested(cycleId, requestId);
+
+            // Return zero address - winner will be set when VRF is fulfilled
+            return address(0);
         } else {
             // Find lowest bidder
             address lowestBidder = address(0);
@@ -420,13 +435,62 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
 
             cycle.winner = lowestBidder;
             cycle.winningBid = lowestBid;
+
+            // Mark as winner in member manager
+            memberManager.markAsWinner(cycle.winner, cycle.potId, cycleId);
+
+            emit WinnerDeclared(cycleId, cycle.winner, cycle.winningBid);
+            return cycle.winner;
         }
+    }
+
+    /// @notice Callback from LotteryEngine when VRF is fulfilled
+    /// @param requestId The VRF request ID
+    /// @param winner The randomly selected winner address
+    function fulfillRandomWinner(uint256 requestId, address winner) external onlyLotteryEngine whenNotPaused {
+        uint256 cycleId = requestIdToCycle[requestId];
+        if (cycleId == 0) revert VRFRequestNotFound();
+
+        AuctionCycle storage cycle = auctionCycles[cycleId];
+
+        if (cycle.status != CycleStatus.AwaitingVRF) revert InvalidCycleStatus();
+        if (cycle.winner != address(0)) revert WinnerAlreadySet();
+
+        Pot storage pot = chainPots[cycle.potId];
+
+        // Set winner from VRF result
+        cycle.winner = winner;
+        cycle.winningBid = pot.amountPerCycle;
+        cycle.status = CycleStatus.BiddingClosed; // Reset to BiddingClosed so completeCycle can proceed
 
         // Mark as winner in member manager
         memberManager.markAsWinner(cycle.winner, cycle.potId, cycleId);
 
         emit WinnerDeclared(cycleId, cycle.winner, cycle.winningBid);
-        return cycle.winner;
+    }
+
+    /// @notice Check if VRF request has been fulfilled and set winner if so
+    /// @dev Can be called manually if VRF was fulfilled but callback failed
+    function checkAndSetVRFWinner(uint256 cycleId) external validCycle(cycleId) whenNotPaused {
+        AuctionCycle storage cycle = auctionCycles[cycleId];
+
+        if (cycle.status != CycleStatus.AwaitingVRF) revert InvalidCycleStatus();
+        if (cycle.vrfRequestId == 0) revert InvalidCycle();
+
+        if (!lotteryEngine.isRequestFulfilled(cycle.vrfRequestId)) revert VRFNotFulfilled();
+
+        address winner = lotteryEngine.getWinner(cycle.vrfRequestId);
+        if (winner == address(0)) revert InvalidAddress();
+
+        Pot storage pot = chainPots[cycle.potId];
+
+        cycle.winner = winner;
+        cycle.winningBid = pot.amountPerCycle;
+        cycle.status = CycleStatus.BiddingClosed;
+
+        memberManager.markAsWinner(cycle.winner, cycle.potId, cycleId);
+
+        emit WinnerDeclared(cycleId, cycle.winner, cycle.winningBid);
     }
 
     /// @notice Complete cycle - distribute funds to winner and interest to others
@@ -455,12 +519,22 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
         uint256 nonWinnerCount = pot.members.length - 1;
         if (potInterest > 0 && nonWinnerCount > 0) {
             uint256 interestPerMember = potInterest / nonWinnerCount;
+            uint256 remainder = potInterest % nonWinnerCount; // Distribute remainder to avoid loss
 
             // Distribute interest to non-winners
+            bool remainderDistributed = false;
             for (uint256 i = 0; i < pot.members.length; i++) {
                 address member = pot.members[i];
-                if (member != cycle.winner && interestPerMember > 0) {
-                    escrow.withdrawInterest(cycle.potId, cycle.cycleId, member, interestPerMember);
+                if (member != cycle.winner) {
+                    uint256 amount = interestPerMember;
+                    // Distribute remainder to first non-winner
+                    if (!remainderDistributed && remainder > 0) {
+                        amount += remainder;
+                        remainderDistributed = true;
+                    }
+                    if (amount > 0) {
+                        escrow.withdrawInterest(cycle.potId, cycle.cycleId, member, amount);
+                    }
                 }
             }
 
@@ -597,10 +671,18 @@ contract AuctionEngine is Ownable, ReentrancyGuard, Pausable {
         return cycleCounter - 1;
     }
 
+    /// @notice Get VRF request ID for a cycle
+    /// @param cycleId The cycle identifier
+    /// @return The VRF request ID (0 if not set)
+    function getCycleVRFRequestId(uint256 cycleId) external view validCycle(cycleId) returns (uint64) {
+        return auctionCycles[cycleId].vrfRequestId;
+    }
+
     // -------------------- Emergency Functions --------------------
 
     function emergencyWithdrawUSDC(uint256 amount, address to) external onlyOwner whenPaused {
         if (amount <= 0) revert InvalidAmount();
+        if (to == address(0)) revert InvalidAddress();
         USDC.safeTransfer(to, amount);
     }
 

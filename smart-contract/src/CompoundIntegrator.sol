@@ -94,6 +94,7 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
 
     function setEscrow(address _escrow) external onlyOwner {
         if (_escrow == address(0)) revert InvalidAddress();
+        if (_escrow.code.length == 0) revert InvalidAddress(); // Must be a contract
         escrow = _escrow;
         emit EscrowUpdated(_escrow);
     }
@@ -110,11 +111,12 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
     /// @param potId The pot identifier
     /// @param cycleId The cycle identifier
     /// @param amount The USDC amount to supply (6 decimals)
-    function supplyUSDCForPot(
-        uint256 potId,
-        uint256 cycleId,
-        uint256 amount
-    ) external onlyAuthorized whenNotPaused nonReentrant {
+    function supplyUSDCForPot(uint256 potId, uint256 cycleId, uint256 amount)
+        external
+        onlyAuthorized
+        whenNotPaused
+        nonReentrant
+    {
         if (amount <= 0) revert InvalidAmount();
         if (potId == 0) revert InvalidPotId();
         if (cycleId == 0) revert InvalidCycleId();
@@ -127,6 +129,12 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
 
         // Supply to Compound V3
         COMET.supply(USDC_ADDRESS, amount);
+
+        // Verify supply succeeded - balance should increase by at least the amount supplied
+        uint256 balanceAfter = COMET.balanceOf(address(this));
+        if (balanceAfter < balanceBefore + amount) {
+            revert InsufficientCompoundBalance(); // Supply verification failed
+        }
 
         // Track the deposit
         PotDeposit storage pot = potDeposits[potId];
@@ -144,16 +152,16 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
         emit SuppliedToCompound(potId, cycleId, amount, block.timestamp);
     }
 
-
     /// @notice Withdraw USDC from Compound V3 for a specific pot/cycle
     /// @param potId The pot identifier
     /// @param cycleId The cycle identifier
     /// @param amount The USDC amount to withdraw
-    function withdrawUSDCForPot(
-        uint256 potId,
-        uint256 cycleId,
-        uint256 amount
-    ) external onlyAuthorized whenNotPaused nonReentrant {
+    function withdrawUSDCForPot(uint256 potId, uint256 cycleId, uint256 amount)
+        external
+        onlyAuthorized
+        whenNotPaused
+        nonReentrant
+    {
         if (amount <= 0) revert InvalidAmount();
         if (potId == 0) revert InvalidPotId();
         if (cycleId == 0) revert InvalidCycleId();
@@ -164,11 +172,20 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
         if (!cycle.active) revert CycleNotActive();
 
         // Verify we have enough in Compound
-        uint256 availableBalance = COMET.balanceOf(address(this));
-        if (availableBalance < amount) revert InsufficientCompoundBalance();
+        uint256 compoundBalanceBefore = COMET.balanceOf(address(this));
+        if (compoundBalanceBefore < amount) revert InsufficientCompoundBalance();
+
+        // Get USDC balance before withdrawal
+        uint256 usdcBalanceBefore = USDC.balanceOf(address(this));
 
         // Withdraw from Compound V3
         COMET.withdraw(USDC_ADDRESS, amount);
+
+        // Verify withdrawal succeeded - USDC balance should increase by the withdrawn amount
+        uint256 usdcBalanceAfter = USDC.balanceOf(address(this));
+        if (usdcBalanceAfter < usdcBalanceBefore + amount) {
+            revert InsufficientUSDCBalance(); // Withdrawal verification failed
+        }
 
         // Transfer to escrow
         USDC.safeTransfer(msg.sender, amount);
@@ -185,10 +202,13 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
     /// @notice Withdraw interest only for a specific pot/cycle
     /// @param potId The pot identifier
     /// @param cycleId The cycle identifier
-    function withdrawInterestForPot(
-        uint256 potId,
-        uint256 cycleId
-    ) external onlyAuthorized whenNotPaused nonReentrant returns (uint256 interestAmount) {
+    function withdrawInterestForPot(uint256 potId, uint256 cycleId)
+        external
+        onlyAuthorized
+        whenNotPaused
+        nonReentrant
+        returns (uint256 interestAmount)
+    {
         if (potId == 0) revert InvalidPotId();
         if (cycleId == 0) revert InvalidCycleId();
 
@@ -199,8 +219,17 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
             return 0;
         }
 
+        // Get USDC balance before withdrawal
+        uint256 usdcBalanceBefore = USDC.balanceOf(address(this));
+
         // Withdraw interest from Compound
         COMET.withdraw(USDC_ADDRESS, interestAmount);
+
+        // Verify withdrawal succeeded
+        uint256 usdcBalanceAfter = USDC.balanceOf(address(this));
+        if (usdcBalanceAfter < usdcBalanceBefore + interestAmount) {
+            revert InsufficientUSDCBalance(); // Interest withdrawal verification failed
+        }
 
         // Transfer to escrow
         USDC.safeTransfer(msg.sender, interestAmount);
@@ -217,9 +246,7 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
     /// @notice Compound any earned interest back into the pool
     function compoundInterest() external onlyAuthorized whenNotPaused {
         uint256 currentBalance = COMET.balanceOf(address(this));
-        uint256 netInterest = currentBalance > totalPrincipalSupplied 
-            ? currentBalance - totalPrincipalSupplied 
-            : 0;
+        uint256 netInterest = currentBalance > totalPrincipalSupplied ? currentBalance - totalPrincipalSupplied : 0;
 
         if (netInterest > 0) {
             // Interest is automatically compounded in Compound V3
@@ -240,10 +267,7 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
     /// @param potId The pot identifier
     /// @param cycleId The cycle identifier
     /// @return interestEarned The interest earned (in USDC, 6 decimals)
-    function getPotCycleInterest(
-        uint256 potId,
-        uint256 cycleId
-    ) public view returns (uint256 interestEarned) {
+    function getPotCycleInterest(uint256 potId, uint256 cycleId) public view returns (uint256 interestEarned) {
         PotDeposit storage pot = potDeposits[potId];
         CycleDeposit storage cycle = pot.cycles[cycleId];
 
@@ -253,13 +277,13 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
 
         // Get current Compound balance
         uint256 currentCompoundBalance = COMET.balanceOf(address(this));
-        
+
         // Calculate this cycle's share of total deposits
         uint256 cycleShare = (cycle.principalDeposited * 1e18) / totalPrincipalSupplied;
-        
+
         // Calculate this cycle's current value in Compound
         uint256 cycleCurrentValue = (currentCompoundBalance * cycleShare) / 1e18;
-        
+
         // Interest = current value - principal - already withdrawn
         if (cycleCurrentValue > cycle.principalDeposited) {
             interestEarned = cycleCurrentValue - cycle.principalDeposited - cycle.withdrawn;
@@ -271,11 +295,7 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
     }
 
     /// @notice Get pot's total deposits and withdrawals
-    function getPotStats(uint256 potId)
-        external
-        view
-        returns (uint256 totalPrincipal, uint256 totalWithdrawn)
-    {
+    function getPotStats(uint256 potId) external view returns (uint256 principal, uint256 withdrawn) {
         PotDeposit storage pot = potDeposits[potId];
         return (pot.totalPrincipal, pot.totalWithdrawn);
     }
@@ -284,27 +304,17 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
     function getCycleDeposit(uint256 potId, uint256 cycleId)
         external
         view
-        returns (
-            uint256 principalDeposited,
-            uint256 withdrawn,
-            uint256 timestamp,
-            bool active
-        )
+        returns (uint256 principalDeposited, uint256 withdrawn, uint256 timestamp, bool active)
     {
         CycleDeposit storage cycle = potDeposits[potId].cycles[cycleId];
-        return (
-            cycle.principalDeposited,
-            cycle.withdrawn,
-            cycle.timestamp,
-            cycle.active
-        );
+        return (cycle.principalDeposited, cycle.withdrawn, cycle.timestamp, cycle.active);
     }
 
     /// @notice Get current supply APY from Compound V3
     function getCurrentSupplyAPY() external view returns (uint256) {
         uint256 utilization = COMET.getUtilization();
         uint64 supplyRate = COMET.getSupplyRate(utilization);
-        
+
         // Convert from per-second rate to APY percentage
         // supplyRate is in 1e18 precision per second
         uint256 secondsPerYear = 365 days;
@@ -374,7 +384,7 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
         if (amount <= 0) revert InvalidAmount();
 
         uint256 contractBalance = USDC.balanceOf(address(this));
-        
+
         if (contractBalance < amount) {
             // Need to withdraw from Compound
             uint256 needed = amount - contractBalance;
@@ -390,7 +400,6 @@ contract CompoundV3Integrator is Ownable, ReentrancyGuard, Pausable {
         if (token == USDC_ADDRESS) revert InvalidAddress();
         IERC20(token).safeTransfer(owner(), amount);
     }
-
 }
 
 // deployed address: 0x0F14B892D9e9aF87d4B877a0DaC35374D37b4ea4

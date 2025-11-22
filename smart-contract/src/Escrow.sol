@@ -102,6 +102,7 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
 
     function setAuctionEngine(address _auctionEngine) external onlyOwner {
         if (_auctionEngine == address(0)) revert InvalidAddress();
+        if (_auctionEngine.code.length == 0) revert InvalidAddress(); // Must be a contract
 
         address oldEngine = auctionEngine;
         auctionEngine = _auctionEngine;
@@ -111,6 +112,7 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
 
     function setCompoundIntegrator(address _compoundIntegrator) external onlyOwner {
         if (_compoundIntegrator == address(0)) revert InvalidAddress();
+        if (_compoundIntegrator.code.length == 0) revert InvalidAddress(); // Must be a contract
 
         address oldIntegrator = address(compoundIntegrator);
         compoundIntegrator = CompoundV3Integrator(_compoundIntegrator);
@@ -239,6 +241,8 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
         cycle.interestEarned += interestAmount;
         pot.totalInterestEarned += interestAmount;
 
+        emit InterestWithdrawn(potId, cycleId, address(0), interestAmount); // address(0) indicates bulk withdrawal
+
         return interestAmount;
     }
 
@@ -279,7 +283,7 @@ contract Escrow is Ownable, ReentrancyGuard, Pausable {
     /// @notice Mark a cycle as completed
     /// @param potId The pot identifier
     /// @param cycleId The cycle identifier
-    function markCycleCompleted(uint256 potId, uint256 cycleId) external onlyAuctionEngine {
+    function markCycleCompleted(uint256 potId, uint256 cycleId) external onlyAuctionEngine whenNotPaused {
         PotFunds storage pot = potFunds[potId];
         CycleFunds storage cycle = pot.cycles[cycleId];
 
