@@ -6,13 +6,19 @@ import "../src/Escrow.sol";
 import "./mocks/MockUSDC.sol";
 import "./mocks/MockCompundV3Integrator.sol";
 
+contract MockAuctionEngine {
+    // only needed so setAuctionEngine sees a contract with code
+    // add any minimal hooks here if tests call it
+    function noop() external pure {}
+}
+
 contract EscrowTest is Test {
     Escrow escrow;
     MockUSDC usdc;
     MockCompoundV3Integrator compound;
-
+    MockAuctionEngine mockAuction = new MockAuctionEngine();
     address owner = address(0xA1);
-    address auction = address(0xA2);
+    address auction = address(mockAuction);
     address user1 = address(0xA3);
     address winner = address(0xA4);
     address alice = address(0xA5);
@@ -23,13 +29,11 @@ contract EscrowTest is Test {
 
     function setUp() public {
         vm.startPrank(owner);
-
         usdc = new MockUSDC();
         compound = new MockCompoundV3Integrator();
 
         escrow = new Escrow(address(usdc), address(compound));
-
-        escrow.setAuctionEngine(auction);
+        escrow.setAuctionEngine(address(auction));
 
         vm.stopPrank();
 
@@ -148,10 +152,9 @@ contract EscrowTest is Test {
     function test_setAuctionEngine() external {
         vm.startPrank(owner);
         address newEngine = address(0xBEEF);
-
+        vm.expectRevert();
         escrow.setAuctionEngine(newEngine);
 
-        assertEq(escrow.auctionEngine(), newEngine);
         vm.stopPrank();
     }
 
@@ -327,9 +330,8 @@ contract EscrowTest is Test {
     function test_setCompoundIntegrator() public {
         vm.startPrank(owner);
         address newIntegrator = address(0x1234);
-
+        vm.expectRevert();
         escrow.setCompoundIntegrator(newIntegrator);
-        assertEq(address(escrow.compoundIntegrator()), newIntegrator);
 
         vm.stopPrank();
     }

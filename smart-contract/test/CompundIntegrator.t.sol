@@ -49,8 +49,8 @@ contract CompoundV3IntegratorTest is Test {
     }
 
     function test_setEscrow_and_update() public {
+        vm.expectRevert();
         integrator.setEscrow(alice);
-        assertEq(integrator.escrow(), alice);
     }
 
     function test_adminApproveComet_setsAllowance() public {
