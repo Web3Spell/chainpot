@@ -194,8 +194,7 @@ await memberManager.addAuthorizedCaller(auctionEngine.address);
 - [ ] Integer overflow protection (Solidity 0.8+)
 
 ## Testing Snapshot 
-<img width="1065" height="618" alt="Screenshot 2025-11-19 at 1 03 06 PM" src="https://github.com/user-attachments/assets/940ae5b5-efd3-4390-8ebc-42c99125db6c" />
-
+<img width="1077" height="738" alt="Screenshot 2025-11-19 at 7 32 24 PM" src="https://github.com/user-attachments/assets/f8fb5ce1-2fb8-4263-83bb-be22235be7ac" />
 
 ### Known Limitations
 - Current ETH/USDC conversion is simulated (production needs DEX integration)
