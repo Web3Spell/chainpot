@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+**/node_modules
 /.pnp
 .pnp.*
 .yarn/*
@@ -15,7 +16,17 @@
 
 # next.js
 /.next/
+**/.next/
 /out/
+
+# Foundry / smart contracts
+smart-contracts/lib/
+smart-contracts/v3/out/
+smart-contracts/v3/cache/
+smart-contracts/v3/broadcast/
+smart-contracts/out/
+smart-contracts/cache/
+smart-contracts/broadcast/
 
 # production
 /build

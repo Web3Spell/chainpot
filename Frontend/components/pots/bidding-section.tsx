@@ -119,7 +119,7 @@ export function BiddingSection({ potId, isDarkMode }: BiddingSectionProps) {
     isLoading: isCheckingPayment, 
     refetch: refetchPaymentStatus 
   } = useHasMemberPaidForCycle(
-    potIdBig,
+    cycleId ?? BigInt(0),
     address as `0x${string}`
   );
 
@@ -140,16 +140,20 @@ export function BiddingSection({ potId, isDarkMode }: BiddingSectionProps) {
     }
   };
 
-  /** ------- Approve + Pay + Bid Flow ------- */
-  const USDC_TOKEN_ADDRESS = '0x036cbd53842c5426634e7929541ec2318f3dcf7e' as `0x${string}`;
-  const auctionEngineAddress = CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`;
+  /** ------- Approve + Pay + Bid Flow -------
+   *  v3 change: AuctionEngineV3.payForCycle now calls EscrowV3.depositFromMember,
+   *  which transferFrom's USDC directly from the member. The USDC approval target
+   *  MUST be the Escrow contract, not the AuctionEngine.
+   */
+  const USDC_TOKEN_ADDRESS = CONTRACT_CONFIG.addresses.usdc_token as `0x${string}`;
+  const escrowAddress = CONTRACT_CONFIG.addresses.escrow as `0x${string}`;
 
   const {
     approve,
     hash: approveHash,
     isPending: isApproving,
     error: approveError,
-  } = useUSDCApprove(auctionEngineAddress, USDC_TOKEN_ADDRESS);
+  } = useUSDCApprove(escrowAddress, USDC_TOKEN_ADDRESS);
 
   const {
     payForCycle,
@@ -167,7 +171,7 @@ export function BiddingSection({ potId, isDarkMode }: BiddingSectionProps) {
 
   const { data: allowance, refetch: refetchAllowance } = useUSDCAllowance(
     address as `0x${string}`,
-    auctionEngineAddress,
+    escrowAddress,
     USDC_TOKEN_ADDRESS
   );
 

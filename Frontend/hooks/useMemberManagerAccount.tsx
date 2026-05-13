@@ -65,22 +65,13 @@ import {
       args: [user],
     });
   
-  export const useGetUserStats = (user: `0x${string}`) =>
-    useReadContract({
-      address: ADDRESS,
-      abi: ABI,
-      functionName: "getUserStats",
-      args: [user],
-    });
-  
-  export const useGetWinRate = (user: `0x${string}`) =>
-    useReadContract({
-      address: ADDRESS,
-      abi: ABI,
-      functionName: "getWinRate",
-      args: [user],
-    });
-  
+  // v3: getUserStats and getWinRate were removed (gas/scope cleanup). Compute client-side
+  // from useGetMemberProfile (totalCyclesWon / totalCyclesParticipated * 10000 for win rate
+  // in basis points). These stubs are kept so existing imports don't break — they return
+  // undefined data and never trigger a contract call.
+  export const useGetUserStats = (_user: `0x${string}`) => ({ data: undefined, isLoading: false, error: null });
+  export const useGetWinRate = (_user: `0x${string}`) => ({ data: undefined, isLoading: false, error: null });
+
   export const useGetCycleParticipation = (
     user: `0x${string}`,
     potId: bigint,
@@ -101,14 +92,11 @@ import {
       args: [user, potId],
     });
   
-  export const useGetTopMembers = (count: bigint) =>
-    useReadContract({
-      address: ADDRESS,
-      abi: ABI,
-      functionName: "getTopMembers",
-      args: [count],
-    });
-  
+  // v3: getTopMembers was removed (O(n²), gas DoS at scale). Compute off-chain by enumerating
+  // members via getTotalMembers + getMemberByIndex + getReputationScore.
+  export const useGetTopMembers = (_count: bigint) => ({ data: undefined, isLoading: false, error: null });
+
+
   export const useGetTotalMembers = () =>
     useReadContract({
       address: ADDRESS,

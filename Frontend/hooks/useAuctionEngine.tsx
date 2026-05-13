@@ -48,13 +48,11 @@ import {
       functionName: "USDC",
     });
   
-  export const useUSDCDecimals = () =>
-    useReadContract({
-      address: ADDRESS,
-      abi: ABI,
-      functionName: "USDC_DECIMALS",
-    });
-  
+  // v3: USDC_DECIMALS constant removed. USDC is 6 decimals — use the literal directly,
+  // or read the token contract if you want runtime confirmation.
+  export const useUSDCDecimals = () => ({ data: 6 as const, isLoading: false, error: null });
+
+
   export const useCycleCounter = () =>
     useReadContract({
       address: ADDRESS,
@@ -145,15 +143,17 @@ import {
       args: [potId, user],
     });
   
+  // v3 (H-01 fix): hasPaidForCycle is now keyed (cycleId, member), not (potId, member).
+  // The dedicated helper hasMemberPaidForCycle was removed; read the public mapping directly.
   export const useHasMemberPaidForCycle = (
-    potId: bigint,
+    cycleId: bigint,
     user: `0x${string}`
   ) =>
     useReadContract({
       address: ADDRESS,
       abi: ABI,
-      functionName: "hasMemberPaidForCycle",
-      args: [potId, user],
+      functionName: "hasPaidForCycle",
+      args: [cycleId, user],
     });
   
   export const useIsPotMember = (potId: bigint, user: `0x${string}`) =>
