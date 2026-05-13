@@ -93,7 +93,7 @@ graph TB
         AE[AuctionEngineV3<br/>pot lifecycle, bids, winners]
     end
 
-    subgraph Custody["Custody &amp; accounting"]
+    subgraph Custody["Custody and accounting"]
         ES[EscrowV3<br/>per-cycle funds]
         CI[CompoundIntegratorV3<br/>ERC4626-style shares vault]
     end

@@ -140,7 +140,7 @@ sequenceDiagram
     M->>CP: approve(Escrow, 90 USDC)
     M->>CP: payForCycle(cycleId)
     Note over CP: Funds enter Compound, earn yield
-    Note over CP: Mom is also a member &amp; can bid
+    Note over CP: Mom is also a member and can bid
     CP->>M: discount + interest at cycle end
     Note over M: $90 cycle → ~92 returned across<br/>6 cycles of 12, plus the win
 ```
@@ -236,7 +236,7 @@ flowchart TD
 
 ```mermaid
 mindmap
-    root((ChainPot UX<br/>themes))
+    root((ChainPot UX themes))
       Trust by code
         On-chain organizer
         No reversible admin
