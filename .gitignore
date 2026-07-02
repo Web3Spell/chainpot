@@ -50,3 +50,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Unnecessary files & directories
+marketing-video/
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
