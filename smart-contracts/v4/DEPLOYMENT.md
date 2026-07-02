@@ -9,12 +9,12 @@
 
 | Contract | Address |
 |---|---|
-| MemberRegistryV4 | `0x00e425C915915Ba5b6b196B65E27850E0081b2Ec` |
-| LotteryEngineV4 | `0x3574f6a5AB7ce7edD3f8418f3F845F796acBF42b` |
-| CompoundIntegratorV4 | `0xCBD0fe917137cccDc99F3d2bcc6129652587EBB4` |
-| VaultV4 | `0x0d2e89eCA81bCCC340A5027882F6270B40BacE70` |
-| CircleEngineV4 (Program A) | `0xF8F5607A26680514d297FaBcccD89082f7077293` |
-| AuctionEngineV4 (Program B) | `0x10D9ED941AECf14a80AF633610202948e1cf5E11` |
+| MemberRegistryV4 | `0xC4222C81B1ceF982F55477916a87C99Faaf9E8E2` |
+| LotteryEngineV4 | `0x8327B810cea3E7B05A032448eED12D781c154880` |
+| CompoundIntegratorV4 | `0x3D05DEa397e7778C5d453Fc8F8DeD3eaCDb8D23e` |
+| VaultV4 | `0x0593a9EA617796Dd44f347331ff2CF60d4117136` |
+| CircleEngineV4 (Program A) | `0x93cdC00c3759c9ed6427612f5FC9C943cB67755C` |
+| AuctionEngineV4 (Program B) | `0x4d79Fc691269E43bBA513320fAAd2Ca9EeCe0394` |
 
 ## External dependencies
 
@@ -24,7 +24,7 @@
 | Compound III Comet (USDC) | `0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017` |
 | Chainlink VRF V2.5 Coordinator | `0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE` |
 | VRF KeyHash | `0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71` |
-| VRF Subscription ID | `95752933549638834563839661591035044483666769954218493417379908663541208911115` |
+| VRF Subscription ID | `95007054372769189896522520864557247936870864063300209685082674604833762333346` |
 
 ## Source verification
 
@@ -62,8 +62,8 @@ two-depositor 3:1 pro-rata check within 1%. The tests no-op under a non-forked `
 
 ## Post-deploy required
 
-1. Add `LotteryEngineV4` (`0x3574f6a5AB7ce7edD3f8418f3F845F796acBF42b`) as a consumer on the Chainlink
-   VRF subscription `95752933549...911115`.
+1. Add `LotteryEngineV4` (`0x8327B810cea3E7B05A032448eED12D781c154880`) as a consumer on the Chainlink
+   VRF subscription `95007054372...333346`.
 2. Fund the VRF subscription with LINK (needed for `CircleEngineV4.startPot` shuffle and the
    `AuctionEngineV4` no-bid path).
 3. (Optional) `CompoundIntegratorV4.setCometRewards(address)` once a Base Sepolia CometRewards is known.

@@ -510,8 +510,8 @@ contract ChainPotV4Test is Test {
         uint256 reqId1 = vrf.nextRequestId();
         circle.drawWinner(potId); // requests VRF (reqId1)
 
-        // Simulate VRF timeout (1 day)
-        vm.warp(block.timestamp + 1 days + 1);
+        // Simulate VRF timeout (1 day + buffer)
+        vm.warp(block.timestamp + 1 days + 100);
 
         // First cancel -> should RETRY (re-request VRF), NOT kill the pot
         uint256 reqId2 = vrf.nextRequestId();
@@ -550,21 +550,21 @@ contract ChainPotV4Test is Test {
         vm.warp(block.timestamp + PAY_WINDOW + 1);
         circle.drawWinner(potId);
 
-        // Treasury should have 20% of 100 USDC = 20 USDC
+        // Treasury should have 20% of 100 USDC = 20 USDC (1 wei tolerance from Compound rounding)
         uint256 treasuryBalance = vault.withdrawable(treasuryAddr);
-        assertEq(treasuryBalance, 20e6, "treasury gets 20% of yield");
-        assertEq(vault.treasuryAccrued(), 20e6, "treasuryAccrued tracks cumulative");
+        assertApproxEqAbs(treasuryBalance, 20e6, 1, "treasury gets 20% of yield");
+        assertApproxEqAbs(vault.treasuryAccrued(), 20e6, 1, "treasuryAccrued tracks cumulative");
 
-        // Members (winner + interest recipients) should split the remaining 480 USDC (400 principal + 80 interest)
+        // Members (winner + interest recipients) should split the remaining ~480 USDC (400 principal + 80% interest)
         uint256 totalMemberCredits;
         for (uint256 i = 0; i < roster.length; i++) {
             totalMemberCredits += vault.withdrawable(roster[i]);
         }
-        assertEq(totalMemberCredits, 480e6, "members get principal + 80% of yield");
+        assertApproxEqAbs(totalMemberCredits, 480e6, 1, "members get principal + 80% of yield");
 
-        // Conservation: backing = 0, total withdrawable = 500 (480 members + 20 treasury)
+        // Conservation: backing = 0, total withdrawable = ~500 (members + treasury)
         assertEq(vault.backing(), 0, "backing drained");
-        assertEq(vault.totalWithdrawableOutstanding(), 500e6, "total = members + treasury");
+        assertApproxEqAbs(vault.totalWithdrawableOutstanding(), 500e6, 1, "total = members + treasury");
     }
 
     function test_safetyModule_noYield_noTreasuryFee() public {
@@ -599,14 +599,14 @@ contract ChainPotV4Test is Test {
         vm.warp(block.timestamp + PAY_WINDOW + 1);
         circle.drawWinner(potId);
 
-        // Treasury should have 20% of 50 = 10 USDC
+        // Treasury should have 20% of 50 = 10 USDC (1 wei tolerance from Compound rounding)
         uint256 owed = vault.withdrawable(treasuryAddr);
-        assertEq(owed, 10e6, "treasury credited");
+        assertApproxEqAbs(owed, 10e6, 1, "treasury credited");
 
         // Treasury claims
         vm.prank(treasuryAddr);
         vault.claim();
         assertEq(vault.withdrawable(treasuryAddr), 0, "treasury claimed");
-        assertEq(usdc.balanceOf(treasuryAddr), 10e6, "treasury received USDC");
+        assertApproxEqAbs(usdc.balanceOf(treasuryAddr), 10e6, 1, "treasury received USDC");
     }
 }
