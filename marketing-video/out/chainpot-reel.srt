@@ -1,0 +1,27 @@
+1
+00:00:00,000 --> 00:00:03,800
+2 billion people save in circles — older than banks.
+
+2
+00:00:03,900 --> 00:00:07,400
+But trust at scale breaks: organizers vanish, the math gets hidden, idle money earns nothing.
+
+3
+00:00:07,500 --> 00:00:11,000
+ChainPot — the savings circle, inside a smart contract. On Base. No organizer required.
+
+4
+00:00:11,100 --> 00:00:16,500
+Mode 1 — Lowest-bid auction: bid low to win the pot early, and the discount splits back to everyone else.
+
+5
+00:00:16,600 --> 00:00:21,100
+Mode 2 — Kitty lottery: no bids? A fair, verifiable random winner via Chainlink VRF.
+
+6
+00:00:21,200 --> 00:00:25,700
+Idle funds earn yield, no organizer can run away, reputation follows your wallet. Supported by Compound Protocol.
+
+7
+00:00:25,800 --> 00:00:30,000
+ChainPot — the chit fund, on-chain. Invite only, live on Base testnet. Request access.
