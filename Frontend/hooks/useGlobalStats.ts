@@ -36,7 +36,7 @@ export function useGlobalStats() {
     functionName: "getTreasuryInfo",
   });
 
-  let activeContributions = 0n;
+  let activeContributions = BigInt(0);
   let activePools = 0;
   let completedPools = 0;
 
@@ -51,7 +51,7 @@ export function useGlobalStats() {
 
         if (status === 1) { // Active
           activePools++;
-          activeContributions += amountPerCycle * expectedMembers * (currentCycle > 0n ? currentCycle : 1n);
+          activeContributions += amountPerCycle * expectedMembers * (currentCycle > BigInt(0) ? currentCycle : BigInt(1));
         } else if (status === 2) { // Completed
           completedPools++;
         }
@@ -59,10 +59,10 @@ export function useGlobalStats() {
     });
   }
 
-  const totalAccrued = treasuryInfo ? BigInt((treasuryInfo as any)[1] || 0) : 0n;
+  const totalAccrued = treasuryInfo ? BigInt((treasuryInfo as any)[1] || 0) : BigInt(0);
   
   // Previous 30 days is hard to calculate without indexer, so we use a mock ratio for now
-  const prevInterest = totalAccrued / 3n; 
+  const prevInterest = totalAccrued / BigInt(3); 
 
   return {
     totalPools: circleCount + auctionCount,

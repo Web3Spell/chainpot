@@ -302,15 +302,13 @@ export default function Home() {
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className="flex-1 flex flex-col items-center justify-center px-6 md:px-12 pb-16 md:pb-24 mt-48"
+          className="flex-1 flex flex-col items-center justify-center px-6 md:px-12 pb-2 md:pb-4 mt-32 md:mt-48"
         >
-          <div className="h-8 md:h-12" />
-
           {/* Heading */}
-          <div className="text-center space-y-6 max-w-6xl flex-1 flex flex-col justify-center">
+          <div className="text-center space-y-4 max-w-6xl flex-1 flex flex-col justify-center">
             <motion.h1
               variants={titleVariants}
-              className="text-7xl sm:text-8xl md:text-9xl lg:text-[251px] text-white font-bold"
+              className="text-7xl sm:text-8xl md:text-9xl lg:text-[200px] xl:text-[240px] 2xl:text-[280px] text-white font-bold tracking-tight"
             >
               <motion.span
                 animate={{
@@ -336,7 +334,7 @@ export default function Home() {
 
             <motion.div
               variants={itemVariants}
-              className="flex flex-col md:flex-row items-center justify-center gap-4 pt-8"
+              className="flex flex-col md:flex-row items-center justify-center gap-4 pt-2"
             >
               <motion.button
                 variants={buttonVariants}
@@ -364,7 +362,7 @@ export default function Home() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 1.5 }}
-          className="text-center py-6 text-white/40 text-sm"
+          className="text-center py-2 text-white/40 text-sm"
         >
           © 2025 ChainPot. All rights reserved.
         </motion.footer>
