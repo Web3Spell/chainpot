@@ -8,7 +8,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { motion, useAnimation } from 'framer-motion';
 import { clashDisplaySemibold } from './ui/fonts';
 
-import { useIsRegistered, useRegisterMember } from '@/hooks/useMemberManagerAccount';
+import { useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
 import Image from 'next/image';
 
 export default function Home() {
@@ -93,7 +93,7 @@ export default function Home() {
     if (!address) return alert('Wallet not connected');
 
     try {
-      const tx: any = await registerMember(address as `0x${string}`);
+      const tx: any = await registerMember();
       if (tx && typeof tx.wait === 'function') {
         await tx.wait();
         if (tx.success) {
