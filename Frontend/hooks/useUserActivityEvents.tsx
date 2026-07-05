@@ -1,90 +1,134 @@
-// hooks/useUserActivityEvents.ts
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  useOnPotJoined,
-  useOnBidPlaced,
-  useOnCycleStarted,
-  useOnWinnerDeclared,
-  useOnPotCreated,
-} from "@/hooks/useAuctionEngine";
+import { useState } from "react";
+import { useWatchContractEvent } from "wagmi";
+import { CONTRACT_CONFIG } from "../config/hooksConf";
 
 export function useUserActivityEvents(address?: `0x${string}`) {
   const [events, setEvents] = useState<any[]>([]);
 
-  // Helper → push safe event record
-  const pushEvent = (type: string, log: any) => {
+  const pushEvent = (type: string, log: any, engine: "circle" | "auction") => {
     const timestamp = Date.now() / 1000;
-
     setEvents((prev) => [
       {
         type,
         log,
         timestamp,
-        // extract args safely
+        engine,
         args: log?.args ?? log,
       },
-      ...prev, // newest first
+      ...prev,
     ]);
   };
 
-  // ------------ USER-SPECIFIC FILTERS -------------
   const isUser = (addr: any) =>
     address && addr && addr.toLowerCase() === address.toLowerCase();
 
-  // ------------------------------------------------
-  // 🔵 EVENT: JoinedPot(address user, uint256 potId)
-  // ------------------------------------------------
-  useOnPotJoined((logs: any[]) => {
-    logs.forEach((log) => {
-      const user = log?.args?.user ?? log?.args?.[0];
-      if (isUser(user)) pushEvent("JoinedPot", log);
-    });
+  // ----- Circle Engine Events -----
+
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.circleEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.circleEngine,
+    eventName: "Joined",
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const member = (log.args as any).member;
+        if (isUser(member)) pushEvent("Joined", log, "circle");
+      });
+    },
   });
 
-  // ------------------------------------------------
-  // 🔵 EVENT: BidPlaced(cycleId, bidder, amount)
-  // ------------------------------------------------
-  useOnBidPlaced((logs: any[]) => {
-    logs.forEach((log) => {
-      const bidder = log?.args?.bidder ?? log?.args?.[1];
-      if (isUser(bidder)) pushEvent("BidPlaced", log);
-    });
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.circleEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.circleEngine,
+    eventName: "PotCreated",
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const creator = (log.args as any).creator;
+        if (isUser(creator)) pushEvent("PotCreated", log, "circle");
+      });
+    },
   });
 
-  // ------------------------------------------------
-  // 🔵 EVENT: WinnerDeclared(potId, cycleId, winner)
-  // ------------------------------------------------
-  useOnWinnerDeclared((logs: any[]) => {
-    logs.forEach((log) => {
-      const winner = log?.args?.winner ?? log?.args?.[2];
-      if (isUser(winner)) pushEvent("WinnerDeclared", log);
-    });
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.circleEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.circleEngine,
+    eventName: "CycleStarted",
+    onLogs(logs) {
+      logs.forEach((log) => pushEvent("CycleStarted", log, "circle"));
+    },
   });
 
-  // ------------------------------------------------
-  // 🟡 EVENT: CycleStarted(potId, cycleId)
-  // (not user-specific but useful for dashboard)
-  // ------------------------------------------------
-  useOnCycleStarted((logs: any[]) => {
-    logs.forEach((log) => {
-      pushEvent("CycleStarted", log);
-    });
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.circleEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.circleEngine,
+    eventName: "WinnerSelected",
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const winner = (log.args as any).winner;
+        if (isUser(winner)) pushEvent("WinnerSelected", log, "circle");
+      });
+    },
   });
 
-  // ------------------------------------------------
-  // 🟣 EVENT: PotCreated(creator, potId)
-  // ------------------------------------------------
-  useOnPotCreated((logs: any[]) => {
-    logs.forEach((log) => {
-      const creator = log?.args?.creator ?? log?.args?.[0];
-      if (isUser(creator)) pushEvent("PotCreated", log);
-    });
+  // ----- Auction Engine Events -----
+
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.auctionEngine,
+    eventName: "Joined",
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const member = (log.args as any).member;
+        if (isUser(member)) pushEvent("Joined", log, "auction");
+      });
+    },
   });
 
-  return {
-    events,
-    isLoading: false, // events load live
-  };
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.auctionEngine,
+    eventName: "PotCreated",
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const creator = (log.args as any).creator;
+        if (isUser(creator)) pushEvent("PotCreated", log, "auction");
+      });
+    },
+  });
+
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.auctionEngine,
+    eventName: "CycleStarted",
+    onLogs(logs) {
+      logs.forEach((log) => pushEvent("CycleStarted", log, "auction"));
+    },
+  });
+
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.auctionEngine,
+    eventName: "WinnerSelected",
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const winner = (log.args as any).winner;
+        if (isUser(winner)) pushEvent("WinnerSelected", log, "auction");
+      });
+    },
+  });
+
+  useWatchContractEvent({
+    address: CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.auctionEngine,
+    eventName: "BidPlaced",
+    onLogs(logs) {
+      logs.forEach((log) => {
+        const bidder = (log.args as any).bidder;
+        if (isUser(bidder)) pushEvent("BidPlaced", log, "auction");
+      });
+    },
+  });
+
+  return { events, isLoading: false };
 }

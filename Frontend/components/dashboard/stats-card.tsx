@@ -1,175 +1,21 @@
 'use client';
 
-import React, { useMemo } from 'react';
-import { useGetCurrentPotCount, useGetPotInfo, useGetPotMemberCount } from '@/hooks/useAuctionEngine';
-import { useUSDCDecimals } from '@/hooks/useUsdc';
+import React from 'react';
+import { useGlobalStats, formatUSDC } from '@/hooks/useGlobalStats';
 
 interface StatsCardsProps {
   isDarkMode: boolean;
 }
 
-/**
- * Defensive helpers
- */
-function getField(pot: any, index: number, name?: string) {
-  if (!pot) return undefined;
-  if (Array.isArray(pot) && pot.length > index) return pot[index];
-  if (name && typeof pot === 'object') {
-    if (name in pot) return pot[name];
-    return pot[index];
-  }
-  return undefined;
-}
-
-function toBigIntSafe(v: any) {
-  try {
-    if (typeof v === 'bigint') return v;
-    if (typeof v === 'number') return BigInt(Math.floor(v));
-    if (v && typeof v.toString === 'function') {
-      const s = v.toString();
-      if (/^\d+$/.test(s)) return BigInt(s);
-    }
-  } catch {}
-  return BigInt(0);
-}
-
-/** format smallest unit -> human with decimals */
-function formatTokenAmount(amountSmallest: bigint, decimals = 6) {
-  try {
-    const factor = BigInt(10) ** BigInt(decimals);
-    const whole = amountSmallest / factor;
-    const frac = amountSmallest % factor;
-    if (frac === BigInt(0)) return `${whole.toString()}`;
-    // show two decimals
-    const scaled = (frac * BigInt(100)) / factor;
-    const fracStr = String(scaled).padStart(2, '0').replace(/0+$/, '');
-    return `${whole.toString()}${fracStr ? '.' + fracStr : ''}`;
-  } catch {
-    return String(amountSmallest ?? '0');
-  }
-}
-
 export function StatsCards({ isDarkMode }: StatsCardsProps) {
-  // read pot count
-  const { data: potCountRaw, isLoading: isCountLoading } = useGetCurrentPotCount();
-  const { data: usdcDecimalsData } = useUSDCDecimals?.();
-  const decimals = typeof usdcDecimalsData === 'number' ? usdcDecimalsData : 6;
+  const { totalPools, activePools, completedPools, activeContributions } = useGlobalStats();
 
-  const potCount = useMemo(() => {
-    if (potCountRaw === undefined || potCountRaw === null) return 0;
-    if (typeof potCountRaw === 'bigint') return Number(potCountRaw);
-    if (typeof potCountRaw === 'number') return potCountRaw;
-    try {
-      return Number(potCountRaw);
-    } catch {
-      return 0;
-    }
-  }, [potCountRaw]);
-
-  // Limit how many pots we'll check to avoid huge fan-out.
-  const MAX_CHECK = 50;
-  const checkCount = Math.min(Math.max(potCount, 0), MAX_CHECK);
-
-  // Prepare arrays of hooks (stable count to avoid hook-order problems)
-  // We will call useGetPotInfo for i from 1..MAX_CHECK but enable only when i <= potCount
-  const potInfos = new Array(MAX_CHECK).fill(null).map((_, idx) => {
-    const id = idx + 1;
-    return useGetPotInfo(BigInt(id));
-  });
-
-  const memberCounts = new Array(MAX_CHECK).fill(null).map((_, idx) => {
-    const id = idx + 1;
-    return useGetPotMemberCount(BigInt(id));
-  });
-
-  // aggregate values
-  let totalPools = potCount;
-  let activePools = 0;
-  let completedPools = 0;
-  let totalParticipants = 0;
-  let activeContributionsSmallest = BigInt(0); // sum(amountPerCycle * cycleCount)
-  let checked = 0;
-
-  for (let i = 0; i < checkCount; i++) {
-    const q = potInfos[i];
-    const m = memberCounts[i];
-
-    if (!q) continue;
-    const pot = q.data;
-    if (!pot) continue;
-    checked++;
-
-    // extract relevant fields safely
-    const amountPerCycleRaw = getField(pot, 2, 'amountPerCycle'); // index 2
-    const cycleCountRaw = getField(pot, 4, 'cycleCount'); // index 4
-    const completedCyclesRaw = getField(pot, 5, 'completedCycles'); // index 5
-    const statusRaw = getField(pot, 8, 'status'); // index 8
-    const membersRaw = getField(pot, 9, 'members'); // index 9 - may be array
-
-    const amountPerCycle = toBigIntSafe(amountPerCycleRaw);
-    const cycleCount = Number(cycleCountRaw ?? 0);
-    const completedCycles = Number(completedCyclesRaw ?? 0);
-
-    // participants pref: memberCount hook, else members array
-    const participants = (m && typeof m.data === 'bigint') ? Number(m.data) :
-      Array.isArray(membersRaw) ? membersRaw.length : 0;
-
-    totalParticipants += participants;
-
-    // determine status: numeric enum or string
-    const status =
-      typeof statusRaw === 'number'
-        ? statusRaw === 0 ? 'Active' : 'Paused'
-        : String(statusRaw ?? 'Active');
-
-    if (status === 'Active') activePools++;
-    if (completedCycles >= cycleCount && cycleCount > 0) completedPools++;
-
-    // add to active contributions = amountPerCycle * cycleCount (smallest units)
-    try {
-      activeContributionsSmallest += amountPerCycle * BigInt(cycleCount);
-    } catch {
-      // ignore overflow
-    }
-  }
-
-  const isLoading = isCountLoading || potInfos.slice(0, checkCount).some((q) => q.isLoading) || memberCounts.slice(0, checkCount).some((q) => q.isLoading);
-
-  // Format displays
   const totalPoolsDisplay = totalPools;
   const activePoolsDisplay = activePools;
   const completedPoolsDisplay = completedPools;
-  const participantsDisplay = totalParticipants;
-  const activeContribDisplay = formatTokenAmount(BigInt(activeContributionsSmallest), decimals);
 
-  // Minimal chart data derived from first few pots (for bars)
-  const barHeights = potInfos.slice(0, Math.min(6, checkCount)).map((q) => {
-    if (!q || !q.data) return 10;
-    const amt = toBigIntSafe(getField(q.data, 2, 'amountPerCycle'));
-    const cnt = Number(getField(q.data, 4, 'cycleCount') ?? 1);
-    const total = Number(amt === BigInt(0) ? 0 : Number(amt) * cnt) || 10;
-    // normalize to percent-ish (visual only)
-    return Math.min(90, Math.max(8, Math.round((total / 1000) % 100)));
-  });
-
-  // lightweight line value for top card (use activeContrib scaled)
-  const lineValueDisplay = `$${activeContribDisplay}`;
-
-  // Loading skeleton
-  if (isLoading) {
-    return (
-      <section className="py-8 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {[0,1,2].map((i) => (
-            <div key={i} className={`border-3 border-black rounded-3xl p-6 backdrop-blur animate-pulse ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
-              <div className="h-6 bg-white/10 rounded mb-4" />
-              <div className="h-32 bg-white/10 rounded" />
-            </div>
-          ))}
-        </div>
-      </section>
-    );
-  }
+  const lineValueDisplay = formatUSDC(activeContributions);
+  const barHeights = [40, 60, 70, 50, 80, 65];
 
   return (
     <section className="py-8 space-y-6">
@@ -285,18 +131,9 @@ export function StatsCards({ isDarkMode }: StatsCardsProps) {
               <p className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>{lineValueDisplay}</p>
 
               <div className="flex items-end justify-around h-24 gap-1">
-                {barHeights.length ? barHeights.map((height, i) => (
-                  <div
-                    key={i}
-                    className={`flex-1 rounded-t ${isDarkMode ? 'bg-white' : 'bg-black'}`}
-                    style={{ height: `${height}%` }}
-                  />
-                )) : (
-                  // fallback mock bars
-                  [40, 60, 70, 50, 80, 65].map((height, i) => (
-                    <div key={i} className={`flex-1 rounded-t ${isDarkMode ? 'bg-white' : 'bg-black'}`} style={{ height: `${height}%` }} />
-                  ))
-                )}
+                {barHeights.map((height, i) => (
+                  <div key={i} className={`flex-1 rounded-t ${isDarkMode ? 'bg-white' : 'bg-black'}`} style={{ height: `${height}%` }} />
+                ))}
               </div>
 
               <p className={`text-xs text-center ${isDarkMode ? 'text-white/50' : 'text-black/50'}`}>Month1 Month2 Month3 Month4 Month5 Month6</p>
