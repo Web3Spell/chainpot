@@ -1,1 +1,0 @@
-- [ChainPot V4 architecture](chainpot-v4-architecture.md) — two-program invite-only ROSCA; plan in CHAINPOT_V4_PLAN.md; locked product decisions
