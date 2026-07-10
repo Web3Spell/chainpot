@@ -6,8 +6,8 @@
 [![Solidity 0.8.24](https://img.shields.io/badge/solidity-0.8.24-363636)](smart-contracts/v4/)
 [![Foundry](https://img.shields.io/badge/foundry-1.4-orange)](smart-contracts/v4/)
 [![Network: Base Sepolia](https://img.shields.io/badge/network-Base%20Sepolia-0052FF)](https://sepolia.basescan.org/)
-[![Tests: 18/18](https://img.shields.io/badge/tests-18%2F18%20passing-brightgreen)](smart-contracts/v4/test/)
-[![Audit: v4](https://img.shields.io/badge/audit-v4%20remediated-success)](audit_Report.md)
+[![Tests: 41/41](https://img.shields.io/badge/tests-41%2F41%20passing-brightgreen)](smart-contracts/v4/test/)
+[![Audit: v4.1](https://img.shields.io/badge/audit-v4.1%20remediated-success)](smart-contracts/SECURITY_FIXES_V4_1.md)
 
 ---
 
@@ -196,7 +196,37 @@ Key fixes:
 - **M-01/M-03** — Strictly-lower bids with 2% minimum step; no bid manipulation
 - **M-06** — Hard payment deadline enforcement
 
-18 / 18 Foundry tests pass, including full lifecycle and fork tests against real Compound III.
+41 / 41 Foundry tests pass, including full lifecycle, large-roster (100-member) VRF regressions, and fork tests against real Compound III.
+
+---
+
+## V4.1 security-review remediations
+
+After the V4 audit, an independent architecture & security review surfaced 14 further findings
+(F-01 … F-14) — mostly liveness-at-scale and incentive-calibration issues rather than fund theft.
+All are closed with tests; see [`smart-contracts/SECURITY_FIXES_V4_1.md`](smart-contracts/SECURITY_FIXES_V4_1.md) for the full matrix.
+
+Highlights:
+
+- **F-01 / F-02 — VRF gas ceiling (store-then-finalize).** The Chainlink callback previously ran
+  harvest + distribution inside its `callbackGasLimit` and bricked pots past ~10–15 members. The
+  callback now only *stores* the random word; a permissionless `finalizeDraw(potId)` settles in an
+  ordinary transaction. The circle shuffle stores just the seed (order computed on demand), and
+  `cancelStuckShuffle` recovers a never-fulfilled shuffle. **100-member pots are now regression-tested.**
+- **F-03 — custody hardening.** `CompoundIntegratorV4.setVault` is a one-time binding; Vault engine
+  authorization is timelocked after `lockEngineSetup()`. No single owner key can re-point custody.
+- **F-05 — proportionate defaults.** A single missed payment slashes reputation and excludes the
+  member *from that pot*; the permanent, protocol-wide blacklist now triggers only on repeat defaults
+  (≥ 2 distinct pots). The invite-only, zero-collateral model is unchanged.
+- **F-06 — no stranded funds.** Every harvested wei is claimable by someone (`backing == 0` after
+  every finalization, asserted as an invariant).
+- **F-08 — real cadence.** `cycleDuration` is enforced in `startCycle`, so cycles can't be compressed.
+
+> **New required step:** after any draw, a keeper (or anyone) must call `finalizeDraw(potId)` to
+> settle. `drawReady(potId)` signals when settlement is pending. Frontends should wire this in.
+
+> **Redeploy note:** the addresses in the table below point at the pre-V4.1 deployment. Redeploy with
+> `script/DeployV4.s.sol` and update `Frontend/config/hooksConf.ts` before using the new functions.
 
 ---
 
@@ -242,6 +272,7 @@ chainpot/
 └── smart-contracts/
     ├── src/                   ← legacy v2 contracts (kept for reference)
     ├── v3/                    ← v3 contracts (historical, audited)
+    ├── SECURITY_FIXES_V4_1.md ← V4.1 security-review remediations (F-01…F-14)
     └── v4/                    ← ★ current production contracts
         ├── DEPLOYMENT.md      ← deployment record + audit-fix matrix
         ├── foundry.toml
@@ -267,7 +298,7 @@ chainpot/
 ```bash
 cd smart-contracts/v4
 forge build
-forge test                                # 18 / 18 tests
+forge test                                # 41 / 41 tests
 ```
 
 Fork test against real Compound III on Base mainnet:
@@ -338,7 +369,7 @@ gantt
 Contributions are welcome. Please:
 
 1. Open an issue describing the change before sending a PR.
-2. Run `forge test` (must stay 18/18) and `npm run build` in `Frontend/` (must stay green).
+2. Run `forge test` (must stay 41/41) and `npm run build` in `Frontend/` (must stay green).
 3. Keep `v4/` contracts stable — if you're changing core logic, document the change and update the audit report.
 
 See `LICENSE` for terms.

@@ -23,6 +23,19 @@ import {CompoundIntegratorV4} from "./CompoundIntegratorV4.sol";
 ///      - §2.1: `isEngine` multi-engine auth; funds namespaced `funds[engine][pot][cycle]`.
 ///      - Safety Module: 20% of Compound yield is routed to a protocol treasury (POL), providing
 ///        an insurance backstop that grows with TVL. Treasury claims via the same pull-payment system.
+///
+///      V4.1 security-review remediations (see SECURITY_FIXES_V4_1.md):
+///      - F-03: engine authorization is TIMELOCKED after initial deployment wiring. The owner wires
+///        the two engines, then calls `lockEngineSetup()`; from then on adding an engine requires a
+///        2-day `proposeEngine`/`executeEngine` window that users can observe on-chain. Removals
+///        stay instant (defensive). This closes the "owner authorizes a fake engine and drains
+///        `backing` in one tx" path.
+///      - F-06: `creditToTreasury` gives engines a fallback sink so no harvested value can ever
+///        strand in `backing` when a distribution has zero recipients.
+///      - F-13: the treasury is set in the constructor — the Safety Module can never be silently
+///        skipped by a deploy-ordering mistake.
+///      - UX: `WithdrawableCredited` now carries engine/pot/cycle/kind context so frontends and
+///        indexers can attribute every credit (win vs dividend vs refund vs residual vs treasury).
 contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
@@ -30,11 +43,22 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     CompoundIntegratorV4 public immutable integrator;
 
     uint256 public constant RESCUE_TIMELOCK = 2 days;
+    uint256 public constant ENGINE_TIMELOCK = 2 days; // (F-03)
 
     /// @notice Safety Module: 20% of Compound yield goes to protocol treasury (POL).
     uint256 public constant TREASURY_FEE_BPS = 2000; // 20% of yield
     address public treasury;
     uint256 public treasuryAccrued; // cumulative USDC captured by treasury (for frontend "Insurance TVL")
+
+    /// @notice (UX) Why a pull-ledger credit happened. Mirrored by the engines' CREDIT_* constants.
+    enum CreditKind {
+        Win, // 0: winner's pot credit
+        Dividend, // 1: interest / auction-discount share
+        Refund, // 2: early-completion refund
+        Residual, // 3: empty-recipient leftover routed to the winner (F-06)
+        Treasury // 4: empty-recipient leftover routed to the treasury (F-06)
+
+    }
 
     struct CycleFunds {
         uint256 totalCollected; // principal deposited for this cycle
@@ -48,6 +72,10 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
 
     /// @notice Multi-engine authorization (§2.1).
     mapping(address => bool) public isEngine;
+
+    /// @notice (F-03) once locked, engine ADDITIONS require the propose/execute timelock.
+    bool public engineSetupLocked;
+    mapping(address => uint256) public pendingEngineReadyAt; // engine => timestamp (0 = none)
 
     /// @notice GLOBAL per-user pull ledger (H-04).
     mapping(address => uint256) public withdrawable;
@@ -68,23 +96,35 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     error RescueNotReady();
     error NoSurplus();
     error TreasuryNotSet();
+    error EngineSetupIsLocked();
+    error EngineNotReady();
 
     event EngineUpdated(address indexed engine, bool authorized);
-    event Deposited(address indexed engine, uint256 indexed potId, uint256 indexed cycleId, address member, uint256 amount, uint256 shares);
+    event EngineProposed(address indexed engine, uint256 readyAt); // (F-03)
+    event EngineSetupLocked(); // (F-03)
+    event Deposited(
+        address indexed engine, uint256 indexed potId, uint256 indexed cycleId, address member, uint256 amount, uint256 shares
+    );
     event CycleHarvested(address indexed engine, uint256 indexed potId, uint256 indexed cycleId, uint256 assets);
     event TreasuryFeeCollected(address indexed engine, uint256 indexed potId, uint256 indexed cycleId, uint256 fee);
-    event WithdrawableCredited(address indexed to, uint256 amount);
+    event WithdrawableCredited(
+        address indexed to, uint256 amount, address indexed engine, uint256 indexed potId, uint256 cycleId, uint8 kind
+    );
     event Claimed(address indexed user, uint256 amount);
     event RescueRequested(uint256 readyAt);
     event SurplusRescued(address indexed to, uint256 amount);
     event TreasuryUpdated(address indexed newTreasury);
 
-    constructor(address _usdc, address _integrator) Ownable(msg.sender) {
+    /// @dev (F-13) `_treasury` is required at construction so the Safety Module is always live.
+    constructor(address _usdc, address _integrator, address _treasury) Ownable(msg.sender) {
         if (_usdc == address(0)) revert InvalidAddress();
         if (_integrator == address(0) || _integrator.code.length == 0) revert InvalidAddress();
+        if (_treasury == address(0)) revert InvalidAddress();
         USDC = IERC20(_usdc);
         integrator = CompoundIntegratorV4(_integrator);
+        treasury = _treasury;
         IERC20(_usdc).forceApprove(_integrator, type(uint256).max);
+        emit TreasuryUpdated(_treasury);
     }
 
     modifier onlyEngine() {
@@ -94,10 +134,37 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
 
     // ---- Admin ----
 
+    /// @notice Wire engines during deployment; instant only until `lockEngineSetup()` (F-03).
+    ///         After the lock, ADDING an engine requires `proposeEngine` + `executeEngine` (2-day
+    ///         timelock, observable on-chain). REMOVING an engine stays instant — it is defensive.
     function setEngine(address engine, bool authorized) external onlyOwner {
         if (engine == address(0)) revert InvalidAddress();
+        if (authorized && engineSetupLocked) revert EngineSetupIsLocked();
         isEngine[engine] = authorized;
+        if (!authorized) delete pendingEngineReadyAt[engine];
         emit EngineUpdated(engine, authorized);
+    }
+
+    /// @notice (F-03) One-way switch: from now on, new engines can only be added via the timelock.
+    function lockEngineSetup() external onlyOwner {
+        engineSetupLocked = true;
+        emit EngineSetupLocked();
+    }
+
+    /// @notice (F-03) Propose adding an engine; executable after ENGINE_TIMELOCK.
+    function proposeEngine(address engine) external onlyOwner {
+        if (engine == address(0)) revert InvalidAddress();
+        pendingEngineReadyAt[engine] = block.timestamp + ENGINE_TIMELOCK;
+        emit EngineProposed(engine, pendingEngineReadyAt[engine]);
+    }
+
+    /// @notice (F-03) Execute a matured engine proposal.
+    function executeEngine(address engine) external onlyOwner {
+        uint256 readyAt = pendingEngineReadyAt[engine];
+        if (readyAt == 0 || block.timestamp < readyAt) revert EngineNotReady();
+        delete pendingEngineReadyAt[engine];
+        isEngine[engine] = true;
+        emit EngineUpdated(engine, true);
     }
 
     /// @notice Set the protocol treasury address for the Safety Module.
@@ -184,14 +251,30 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     }
 
     /// @notice Credit a recipient's pull balance from harvested backing (H-04).
-    function creditWithdrawable(address to, uint256 amount) external onlyEngine {
+    /// @param kind CreditKind context for frontends/indexers (UX; see enum above).
+    function creditWithdrawable(address to, uint256 amount, uint256 potId, uint256 cycleId, uint8 kind)
+        external
+        onlyEngine
+    {
         if (to == address(0)) revert InvalidAddress();
         if (amount == 0) revert InvalidAmount();
         if (backing < amount) revert InsufficientBacking();
         backing -= amount;
         withdrawable[to] += amount;
         totalWithdrawableOutstanding += amount;
-        emit WithdrawableCredited(to, amount);
+        emit WithdrawableCredited(to, amount, msg.sender, potId, cycleId, kind);
+    }
+
+    /// @notice (F-06) Fallback sink for a finalization with zero recipients — routes the residual
+    ///         to the treasury so nothing can ever strand in `backing`.
+    function creditToTreasury(uint256 amount, uint256 potId, uint256 cycleId) external onlyEngine {
+        if (amount == 0) revert InvalidAmount();
+        if (treasury == address(0)) revert TreasuryNotSet();
+        if (backing < amount) revert InsufficientBacking();
+        backing -= amount;
+        withdrawable[treasury] += amount;
+        totalWithdrawableOutstanding += amount;
+        emit WithdrawableCredited(treasury, amount, msg.sender, potId, cycleId, uint8(CreditKind.Treasury));
     }
 
     // ---- Claims (ungated; invariant #11) ----
@@ -201,6 +284,8 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     }
 
     /// @notice Keeper helper: pushes a user's own balance TO that user. Never to a third party.
+    /// @dev A USDC-blacklisted `user` makes only THEIR claim revert — it can never affect anyone
+    ///      else's funds or any pot's lifecycle (H-04 isolation).
     function claimFor(address user) external nonReentrant {
         _claim(user, user);
     }

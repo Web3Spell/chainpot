@@ -9,12 +9,12 @@
 
 | Contract | Address |
 |---|---|
-| MemberRegistryV4 | `0xC4222C81B1ceF982F55477916a87C99Faaf9E8E2` |
-| LotteryEngineV4 | `0x8327B810cea3E7B05A032448eED12D781c154880` |
-| CompoundIntegratorV4 | `0x3D05DEa397e7778C5d453Fc8F8DeD3eaCDb8D23e` |
-| VaultV4 | `0x0593a9EA617796Dd44f347331ff2CF60d4117136` |
-| CircleEngineV4 (Program A) | `0x93cdC00c3759c9ed6427612f5FC9C943cB67755C` |
-| AuctionEngineV4 (Program B) | `0x4d79Fc691269E43bBA513320fAAd2Ca9EeCe0394` |
+| MemberRegistryV4 | `0xDa46dC368c0f425223Ab3CD5B29C518C4aAf807f` |
+| LotteryEngineV4 | `0xe57756000a6E7Ae1E439633282e86b2CE73f513E` |
+| CompoundIntegratorV4 | `0x7bb8c353DdFae20b08f9d0A1A0865aa5D33B22F8` |
+| VaultV4 | `0x7D1F7544B0c7739aE70B5367c79009950Af9D2bd` |
+| CircleEngineV4 (Program A) | `0x9A59D312AfcdbD8b93592830BedE6D85aB865C06` |
+| AuctionEngineV4 (Program B) | `0xa0Aac6806BDe9BD34B1bB53A9FA6c04E19937d7b` |
 
 ## External dependencies
 
@@ -62,7 +62,7 @@ two-depositor 3:1 pro-rata check within 1%. The tests no-op under a non-forked `
 
 ## Post-deploy required
 
-1. Add `LotteryEngineV4` (`0x8327B810cea3E7B05A032448eED12D781c154880`) as a consumer on the Chainlink
+1. Add `LotteryEngineV4` (`0xe57756000a6E7Ae1E439633282e86b2CE73f513E`) as a consumer on the Chainlink
    VRF subscription `95007054372...333346`.
 2. Fund the VRF subscription with LINK (needed for `CircleEngineV4.startPot` shuffle and the
    `AuctionEngineV4` no-bid path).
@@ -88,7 +88,7 @@ two-depositor 3:1 pro-rata check within 1%. The tests no-op under a non-forked `
 | inv #11 | blacklist gates joins, never claims | `test_blacklistGatesJoin_butAllowsClaim` |
 | lifecycle | each member wins once; conservation; vault drains | `test_circle_fullPot_eachWinsOnce_conservation` |
 
-**Tests:** 18 / 18 passing (`cd smart-contracts/v4 && forge test`).
+**Tests:** 41 / 41 passing (`cd smart-contracts/v4 && forge test`).
 
 ## Re-deploy
 
