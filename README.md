@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="Frontend/public/images/logo-black.svg" width="200" alt="ChainPot Logo"/>
+  <img src="Frontend/public/images/logo-white.svg" width="200" alt="ChainPot Logo"/>
   <h1>ChainPot</h1>
 </div>
 
