@@ -18,7 +18,7 @@ function PoolItem({ potId, engine, isDarkMode }: { potId: bigint, engine: "circl
 
   if (isLoading || !potData) return null;
 
-  const name = `Pot #${String(potId)}`;
+  const name = `${engine === 'circle' ? 'Circle' : 'Auction'} Pot #${String(potId)}`;
   const description = `By ${String((potData as any)[0]).slice(0, 8)}...`;
   const amountPerCycle = BigInt((potData as any)[4] || 0);
   const cycleCount = Number((potData as any)[3] || 0);
