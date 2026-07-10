@@ -12,6 +12,9 @@ import {RoscaEngineBaseV4} from "./RoscaEngineBaseV4.sol";
 ///        raise/withdraw their commitment.
 ///      - M-02: bid reputation awarded once per (member, cycle) via `firstBid`.
 ///      - M-03: a new lowest must beat the standing lowest by >= MIN_BID_STEP_BPS.
+///      - (F-10, V4.1): bidding opens only AFTER the payment deadline, so every bid is placed
+///        against the final, fully-collected pot size — the H-03 ceiling is stable and all bidders
+///        see the same number.
 contract AuctionEngineV4 is RoscaEngineBaseV4 {
     uint256 public constant MIN_BID_STEP_BPS = 200; // 2% (M-03)
 
@@ -24,6 +27,7 @@ contract AuctionEngineV4 is RoscaEngineBaseV4 {
     error BidTooHigh();
     error BidNotLower();
     error BiddingClosed();
+    error BiddingNotOpen();
     error BiddingNotConfigured();
 
     event BidPlaced(uint256 indexed potId, uint256 indexed cycleId, address indexed bidder, uint256 amount);
@@ -45,6 +49,8 @@ contract AuctionEngineV4 is RoscaEngineBaseV4 {
     }
 
     /// @notice Place a strictly-lower bid for the current cycle. Discount auction (lowest wins).
+    ///         (F-10) The bid phase is [paymentDeadline, biddingDeadline): the pot size is final
+    ///         when bidding opens, so the ceiling cannot move under a bidder.
     function placeBid(uint256 potId, uint256 amount) external whenNotPaused {
         Pot storage p = _pots[potId];
         if (p.status != PotStatus.Active) revert PotNotActive();
@@ -56,7 +62,8 @@ contract AuctionEngineV4 is RoscaEngineBaseV4 {
         if (!paidForCycle[potId][idx][msg.sender]) revert NotPaidThisCycle();
         if (hasWonInPot[potId][msg.sender]) revert AlreadyWonThisPot(); // H-01
         if (defaulted[potId][msg.sender]) revert NotMember();
-        if (block.timestamp >= c.biddingDeadline) revert BiddingClosed(); // M-06
+        if (block.timestamp < _effPaymentDeadline(potId, idx)) revert BiddingNotOpen(); // F-10
+        if (block.timestamp >= _effBiddingDeadline(potId, idx)) revert BiddingClosed(); // M-06/F-04
 
         if (amount == 0 || amount >= c.totalCollected) revert BidTooHigh(); // H-03 ceiling = actual
 
@@ -90,7 +97,7 @@ contract AuctionEngineV4 is RoscaEngineBaseV4 {
         Cycle storage c = _cycles[potId][idx];
         if (c.status != CycleStatus.Active) revert CycleNotActive();
         if (c.biddingDeadline == 0) revert BiddingNotConfigured();
-        if (block.timestamp < c.biddingDeadline) revert BiddingOpen();
+        if (block.timestamp < _effBiddingDeadline(potId, idx)) revert BiddingOpen(); // F-04
 
         _ensureSettled(potId, idx);
 
@@ -113,16 +120,14 @@ contract AuctionEngineV4 is RoscaEngineBaseV4 {
     {
         address[] storage members = _pots[potId].members;
         uint256 n = members.length;
-        uint256 count;
-        for (uint256 i = 0; i < n; i++) {
-            address m = members[i];
-            if (m != winner && !defaulted[potId][m]) count++;
-        }
-        out = new address[](count);
+        out = new address[](n);
         uint256 k;
         for (uint256 i = 0; i < n; i++) {
             address m = members[i];
             if (m != winner && !defaulted[potId][m]) out[k++] = m;
+        }
+        assembly {
+            mstore(out, k)
         }
     }
 }

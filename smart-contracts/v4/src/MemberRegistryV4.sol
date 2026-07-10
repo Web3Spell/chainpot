@@ -34,6 +34,16 @@ contract MemberRegistryV4 is Ownable {
     /// @notice Global blacklist. A blacklisted member cannot join or create new pots in either program.
     mapping(address => bool) public isBlacklisted;
 
+    /// @notice (F-05) Distinct-pot default counter. The engines call `markAsDefaulter` at most once
+    ///         per (pot, member), so this counts pots defaulted in.
+    mapping(address => uint256) public defaultCount;
+
+    /// @notice (F-05) Global blacklist triggers only on REPEAT defaults (defaults in >= 2 distinct
+    ///         pots). A single missed payment slashes reputation and excludes the member from that
+    ///         pot, but no longer imposes a permanent protocol-wide ban — one bad Sunday is a
+    ///         pot-level event; a pattern is a protocol-level one.
+    uint256 public constant DEFAULTS_BEFORE_BLACKLIST = 2;
+
     uint256 public constant INITIAL_REPUTATION = 100;
     uint256 public constant REPUTATION_PARTICIPATION = 2;
     uint256 public constant REPUTATION_BID = 1;
@@ -51,7 +61,6 @@ contract MemberRegistryV4 is Ownable {
     error NotAuthorized(address caller);
     error InvalidAddress();
     error AlreadyRegistered(address user);
-    error SelfRegistrationOnly();
 
     event MemberRegistered(address indexed user, uint256 timestamp);
     event ParticipationRecorded(address indexed user, uint256 indexed potId, uint256 indexed cycleId, uint256 contribution);
@@ -92,13 +101,11 @@ contract MemberRegistryV4 is Ownable {
 
     // ---- Registration (self only) ----
 
+    /// @dev (F-14) The redundant `registerMember(address)` overload was removed — it duplicated
+    ///      this function behind a `SelfRegistrationOnly` check and confused integrators with two
+    ///      ABI entries for one behavior.
     function registerMember() external {
         _register(msg.sender);
-    }
-
-    function registerMember(address user) external {
-        if (user != msg.sender) revert SelfRegistrationOnly();
-        _register(user);
     }
 
     function _register(address user) private {
@@ -152,7 +159,9 @@ contract MemberRegistryV4 is Ownable {
         emit ReputationUpdated(user, p.reputationScore, "cycle_won");
     }
 
-    /// @notice M-04: slash reputation AND set the global blacklist on default.
+    /// @notice M-04 (recalibrated by F-05): slash reputation on every default; set the global
+    ///         blacklist only on repeat defaults (>= DEFAULTS_BEFORE_BLACKLIST distinct pots).
+    ///         The defaulter is always excluded from the defaulting pot by the engine regardless.
     function markAsDefaulter(address user, uint256 potId, uint256 cycleId) external onlyAuthorized {
         MemberProfile storage p = memberProfiles[user];
         if (p.reputationScore >= REPUTATION_DEFAULT_PENALTY) {
@@ -160,9 +169,12 @@ contract MemberRegistryV4 is Ownable {
         } else {
             p.reputationScore = 0;
         }
-        isBlacklisted[user] = true;
+        defaultCount[user] += 1;
         emit MemberDefaulted(user, potId, cycleId);
-        emit BlacklistUpdated(user, true);
+        if (defaultCount[user] >= DEFAULTS_BEFORE_BLACKLIST && !isBlacklisted[user]) {
+            isBlacklisted[user] = true;
+            emit BlacklistUpdated(user, true);
+        }
         emit ReputationUpdated(user, p.reputationScore, "default");
     }
 

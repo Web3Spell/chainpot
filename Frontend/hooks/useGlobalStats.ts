@@ -23,12 +23,15 @@ export function useGlobalStats() {
     args: [BigInt(i + 1)],
   }));
 
+  const allCalls = [...circleCalls, ...auctionCalls] as any[];
+
   const { data: potsData } = useReadContracts({
-    contracts: [...circleCalls, ...auctionCalls],
+    contracts: allCalls,
     query: {
       enabled: circleCount > 0 || auctionCount > 0,
     }
-  });
+  } as any);
+
 
   const { data: treasuryInfo } = useReadContract({
     address: CONTRACT_CONFIG.addresses.vault as `0x${string}`,

@@ -39,7 +39,7 @@ function PotItem({ id, engine, isDarkMode }: { id: number; engine: "circle" | "a
   const potDisplay = {
     id,
     engine,
-    name: `Pot #${id}`,
+    name: `${engine === 'circle' ? 'Circle' : 'Auction'} Pot #${id}`,
     description: `By ${String(creator).slice(0, 6)}...`,
     totalAmount: `$${totalAmount}`,
     participants: memberCount,

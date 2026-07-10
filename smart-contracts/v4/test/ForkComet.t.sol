@@ -37,7 +37,7 @@ contract ForkCometTest is Test {
         forked = true;
 
         integrator = new CompoundIntegratorV4(COMET, USDC);
-        vault = new VaultV4(USDC, address(integrator));
+        vault = new VaultV4(USDC, address(integrator), address(0x77EA5));
         integrator.setVault(address(vault));
         // act as the "engine" so we can drive the Vault directly
         vault.setEngine(address(this), true);
@@ -76,7 +76,7 @@ contract ForkCometTest is Test {
         assertGe(assets, principal, "harvest returns at least principal");
         assertEq(vault.backing(), assets, "all harvested assets become backing");
 
-        vault.creditWithdrawable(alice, assets);
+        vault.creditWithdrawable(alice, assets, 1, 1, 0);
         assertEq(vault.backing(), 0, "backing drained to credits");
 
         uint256 before = IERC20(USDC).balanceOf(alice);

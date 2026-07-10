@@ -1,13 +1,16 @@
+// V4.1 security fixes — ABIs regenerated from patched v4 contracts.
+// Addresses updated to the latest Base Sepolia deployment (2026-07-10).
 
 export const CONTRACT_ADDRESSES = {
-  memberRegistry: "0xC4222C81B1ceF982F55477916a87C99Faaf9E8E2",
-  circleEngine: "0x93cdC00c3759c9ed6427612f5FC9C943cB67755C",
-  auctionEngine: "0x4d79Fc691269E43bBA513320fAAd2Ca9EeCe0394",
-  vault: "0x0593a9EA617796Dd44f347331ff2CF60d4117136",
-  lottery: "0x8327B810cea3E7B05A032448eED12D781c154880",
-  compoundIntegrator: "0x3D05DEa397e7778C5d453Fc8F8DeD3eaCDb8D23e",
+  memberRegistry: "0xDa46dC368c0f425223Ab3CD5B29C518C4aAf807f",
+  circleEngine: "0x9A59D312AfcdbD8b93592830BedE6D85aB865C06",
+  auctionEngine: "0xa0Aac6806BDe9BD34B1bB53A9FA6c04E19937d7b",
+  vault: "0x7D1F7544B0c7739aE70B5367c79009950Af9D2bd",
+  lottery: "0xe57756000a6E7Ae1E439633282e86b2CE73f513E",
+  compoundIntegrator: "0x7bb8c353DdFae20b08f9d0A1A0865aa5D33B22F8",
   usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
 };
+
 
 export const CONTRACT_ABIS = {
   memberRegistry: [
@@ -15,6 +18,19 @@ export const CONTRACT_ABIS = {
     "type": "constructor",
     "inputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "DEFAULTS_BEFORE_BLACKLIST",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -173,6 +189,25 @@ export const CONTRACT_ABIS = {
         "name": "",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "defaultCount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -468,19 +503,6 @@ export const CONTRACT_ABIS = {
     "type": "function",
     "name": "registerMember",
     "inputs": [],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "registerMember",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -867,11 +889,6 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
-    "name": "SelfRegistrationOnly",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "UserNotRegistered",
     "inputs": [
       {
@@ -971,6 +988,19 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "MIN_PAYMENT_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "VRF_TIMEOUT",
     "inputs": [],
     "outputs": [
@@ -981,6 +1011,19 @@ export const CONTRACT_ABIS = {
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelStuckShuffle",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1041,6 +1084,19 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "cumulativePauseDuration",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "defaulted",
     "inputs": [
       {
@@ -1052,6 +1108,25 @@ export const CONTRACT_ABIS = {
         "name": "",
         "type": "address",
         "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "drawReady",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
@@ -1099,6 +1174,19 @@ export const CONTRACT_ABIS = {
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "finalizeDraw",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1251,6 +1339,45 @@ export const CONTRACT_ABIS = {
         "name": "memberCount",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPotConfig",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cycleDuration",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "paymentWindow",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "biddingWindow",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "winnersCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "merkleRootVersion",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -1486,6 +1613,39 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "payForCycleWithPermit",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "perCycleVRF",
     "inputs": [
       {
@@ -1531,10 +1691,47 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "releaseSlot",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "member",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rootVersion",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -1557,6 +1754,87 @@ export const CONTRACT_ABIS = {
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "shuffleRequestId",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "shuffleRequestedAt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "shuffleRetryCount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "slotReleased",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [
@@ -1734,6 +2012,31 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "event",
+    "name": "FallbackWinnerSelected",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "winner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Joined",
     "inputs": [
       {
@@ -1810,6 +2113,12 @@ export const CONTRACT_ABIS = {
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      },
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
       }
     ],
     "anonymous": false
@@ -1923,12 +2232,50 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "event",
+    "name": "PotReopened",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PotStarted",
     "inputs": [
       {
         "name": "potId",
         "type": "uint256",
         "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RandomnessReady",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "requestId",
+        "type": "uint256",
+        "indexed": false,
         "internalType": "uint256"
       }
     ],
@@ -1943,6 +2290,25 @@ export const CONTRACT_ABIS = {
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SlotReleased",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "member",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -2028,6 +2394,11 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "AlreadyReleased",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "AlreadyWonThisPot",
     "inputs": []
   },
@@ -2054,6 +2425,11 @@ export const CONTRACT_ABIS = {
   {
     "type": "error",
     "name": "CycleNotActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CycleTooEarly",
     "inputs": []
   },
   {
@@ -2145,12 +2521,27 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "PotNotCompleted",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "PotNotOpen",
     "inputs": []
   },
   {
     "type": "error",
     "name": "PreviousCycleOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RandomnessNotReady",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RandomnessPendingConsumption",
     "inputs": []
   },
   {
@@ -2291,6 +2682,19 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "MIN_PAYMENT_WINDOW",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "VRF_TIMEOUT",
     "inputs": [],
     "outputs": [
@@ -2330,6 +2734,19 @@ export const CONTRACT_ABIS = {
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelStuckShuffle",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -2390,6 +2807,19 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "cumulativePauseDuration",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "declareWinner",
     "inputs": [
       {
@@ -2427,6 +2857,25 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "drawReady",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "eligibleCount",
     "inputs": [
       {
@@ -2448,6 +2897,19 @@ export const CONTRACT_ABIS = {
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "finalizeDraw",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -2600,6 +3062,45 @@ export const CONTRACT_ABIS = {
         "name": "memberCount",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getPotConfig",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "cycleDuration",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "paymentWindow",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "biddingWindow",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "winnersCount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "merkleRootVersion",
+        "type": "uint64",
+        "internalType": "uint64"
       }
     ],
     "stateMutability": "view"
@@ -2893,6 +3394,39 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "payForCycleWithPermit",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "deadline",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "v",
+        "type": "uint8",
+        "internalType": "uint8"
+      },
+      {
+        "name": "r",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "s",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "placeBid",
     "inputs": [
       {
@@ -2937,10 +3471,47 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "releaseSlot",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "member",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "renounceOwnership",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "rootVersion",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2954,6 +3525,87 @@ export const CONTRACT_ABIS = {
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "shuffleRequestId",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "shuffleRequestedAt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "shuffleRetryCount",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "slotReleased",
+    "inputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -3152,6 +3804,31 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "event",
+    "name": "FallbackWinnerSelected",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "winner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "Joined",
     "inputs": [
       {
@@ -3228,6 +3905,12 @@ export const CONTRACT_ABIS = {
         "type": "bytes32",
         "indexed": false,
         "internalType": "bytes32"
+      },
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
       }
     ],
     "anonymous": false
@@ -3341,6 +4024,19 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "event",
+    "name": "PotReopened",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "PotStarted",
     "inputs": [
       {
@@ -3348,6 +4044,50 @@ export const CONTRACT_ABIS = {
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RandomnessReady",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "requestId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "SlotReleased",
+    "inputs": [
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "member",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -3433,6 +4173,11 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "AlreadyReleased",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "AlreadyWonThisPot",
     "inputs": []
   },
@@ -3458,6 +4203,11 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "BiddingNotOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "BiddingOpen",
     "inputs": []
   },
@@ -3479,6 +4229,11 @@ export const CONTRACT_ABIS = {
   {
     "type": "error",
     "name": "CycleNotActive",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "CycleTooEarly",
     "inputs": []
   },
   {
@@ -3575,12 +4330,27 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "PotNotCompleted",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "PotNotOpen",
     "inputs": []
   },
   {
     "type": "error",
     "name": "PreviousCycleOpen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RandomnessNotReady",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "RandomnessPendingConsumption",
     "inputs": []
   },
   {
@@ -3627,9 +4397,27 @@ export const CONTRACT_ABIS = {
         "name": "_integrator",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "_treasury",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "ENGINE_TIMELOCK",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -3705,6 +4493,29 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "creditToTreasury",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "creditWithdrawable",
     "inputs": [
       {
@@ -3716,6 +4527,21 @@ export const CONTRACT_ABIS = {
         "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
+      },
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "kind",
+        "type": "uint8",
+        "internalType": "uint8"
       }
     ],
     "outputs": [],
@@ -3744,6 +4570,32 @@ export const CONTRACT_ABIS = {
         "name": "amount",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "engineSetupLocked",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "executeEngine",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "outputs": [],
@@ -3908,6 +4760,13 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "lockEngineSetup",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "owner",
     "inputs": [],
     "outputs": [
@@ -3938,6 +4797,38 @@ export const CONTRACT_ABIS = {
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "pendingEngineReadyAt",
+    "inputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposeEngine",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -4196,6 +5087,31 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "event",
+    "name": "EngineProposed",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "readyAt",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "EngineSetupLocked",
+    "inputs": [],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "EngineUpdated",
     "inputs": [
       {
@@ -4349,31 +5265,33 @@ export const CONTRACT_ABIS = {
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
+      },
+      {
+        "name": "engine",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "potId",
+        "type": "uint256",
+        "indexed": true,
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "kind",
+        "type": "uint8",
+        "indexed": false,
+        "internalType": "uint8"
       }
     ],
     "anonymous": false
-  },
-  {
-    "type": "error",
-    "name": "AddressEmptyCode",
-    "inputs": [
-      {
-        "name": "target",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
-  },
-  {
-    "type": "error",
-    "name": "AddressInsufficientBalance",
-    "inputs": [
-      {
-        "name": "account",
-        "type": "address",
-        "internalType": "address"
-      }
-    ]
   },
   {
     "type": "error",
@@ -4387,12 +5305,17 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
-    "name": "ExpectedPause",
+    "name": "EngineNotReady",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "FailedInnerCall",
+    "name": "EngineSetupIsLocked",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ExpectedPause",
     "inputs": []
   },
   {

@@ -58,6 +58,7 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
     error ZeroShares();
     error CannotRescueBaseAsset();
     error InsufficientShares();
+    error VaultAlreadySet();
 
     event VaultUpdated(address indexed vault);
     event CometRewardsUpdated(address indexed rewards);
@@ -81,7 +82,11 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
 
     // ---- Admin ----
 
+    /// @notice (F-03) ONE-TIME binding. Re-pointing the vault would let a compromised owner key
+    ///         drain the entire Comet position through a fake vault, contradicting the protocol's
+    ///         "no human signer can drain funds" custody model — so it can never be changed.
     function setVault(address _vault) external onlyOwner {
+        if (vault != address(0)) revert VaultAlreadySet();
         if (_vault == address(0) || _vault.code.length == 0) revert InvalidAddress();
         vault = _vault;
         emit VaultUpdated(_vault);
@@ -156,10 +161,14 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
         accrue();
         assets = convertToAssets(shares);
 
+        // (F-11) Reduce principal PROPORTIONALLY to the shares burned (not by principal+interest),
+        // so the `internalPrincipal` conservation floor used by `accrue()` stays accurate.
+        uint256 principalShare = Math.mulDiv(internalPrincipal, shares, totalShares);
+
         // Effects before interactions ([I] CEI).
         totalShares -= shares;
         realizedAssets = realizedAssets > assets ? realizedAssets - assets : 0;
-        internalPrincipal = internalPrincipal > assets ? internalPrincipal - assets : 0;
+        internalPrincipal -= principalShare;
 
         // Interactions — withdraw from Comet and forward the actually-received amount.
         uint256 balBefore = USDC.balanceOf(address(this));

@@ -20,6 +20,8 @@ contract DeployV4 is Script {
         address vrfCoordinator = vm.envAddress("VRF_COORDINATOR_BASE_SEPOLIA");
         bytes32 keyHash = vm.envBytes32("VRF_KEYHASH_BASE_SEPOLIA");
         uint256 subId = vm.envUint("VRF_SUBSCRIPTION_ID");
+        // (F-13) Safety Module treasury is mandatory; defaults to the deployer if TREASURY unset.
+        address treasury = vm.envOr("TREASURY", vm.addr(pk));
 
         console2.log("Deployer:", vm.addr(pk));
         console2.log("USDC:", usdc);
@@ -36,8 +38,9 @@ contract DeployV4 is Script {
         CompoundIntegratorV4 integrator = new CompoundIntegratorV4(comet, usdc);
         console2.log("CompoundIntegratorV4:", address(integrator));
 
-        VaultV4 vault = new VaultV4(usdc, address(integrator));
+        VaultV4 vault = new VaultV4(usdc, address(integrator), treasury);
         console2.log("VaultV4:", address(vault));
+        console2.log("Treasury (Safety Module):", treasury);
 
         CircleEngineV4 circle = new CircleEngineV4(address(registry), address(vault), address(lottery));
         console2.log("CircleEngineV4:", address(circle));
@@ -46,10 +49,11 @@ contract DeployV4 is Script {
         console2.log("AuctionEngineV4:", address(auction));
 
         // ---- Wiring ----
-        integrator.setVault(address(vault));
+        integrator.setVault(address(vault)); // (F-03) ONE-TIME binding — can never be re-pointed
 
         vault.setEngine(address(circle), true);
         vault.setEngine(address(auction), true);
+        vault.lockEngineSetup(); // (F-03) future engine additions require the 2-day timelock
 
         registry.setAuthorizedCaller(address(circle), true);
         registry.setAuthorizedCaller(address(auction), true);
