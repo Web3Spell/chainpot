@@ -25,7 +25,28 @@ export default function Home() {
     refetch: refetchRegistration,
   } = useIsRegistered(address as `0x${string}`);
 
-  const { registerMember, isPending: isRegistering } = useRegisterMember();
+  const { registerMember, isPending: isRegistering, isConfirming, isConfirmed, error } = useRegisterMember();
+
+  useEffect(() => {
+    if (isConfirmed) {
+      const finishRegistration = async () => {
+        setCheckingStatus(true);
+        await refetchRegistration?.();
+        setShowRegisterModal(false);
+        router.push('/dashboard');
+        setCheckingStatus(false);
+      };
+      finishRegistration();
+    }
+  }, [isConfirmed, refetchRegistration, router]);
+
+  useEffect(() => {
+    if (error) {
+      console.error('Registration error', error);
+      alert(error.message || 'Registration failed. See console for details.');
+      setCheckingStatus(false);
+    }
+  }, [error]);
 
   const [activeNav, setActiveNav] = useState('home');
 
@@ -89,33 +110,9 @@ export default function Home() {
     }
   };
 
-  const handleRegister = async () => {
+  const handleRegister = () => {
     if (!address) return alert('Wallet not connected');
-
-    try {
-      const tx: any = await registerMember();
-      if (tx && typeof tx.wait === 'function') {
-        await tx.wait();
-        if (tx.success) {
-          console.log("txn has succeeded");
-          setCheckingStatus(true);
-          await refetchRegistration?.();
-          setShowRegisterModal(false);
-          router.push('/dashboard');
-        } else {
-          console.log("tx failed maybe", tx);
-          router.push('/');
-        }
-      } else {
-        await new Promise((r) => setTimeout(r, 2000));
-        setCheckingStatus(true);
-      }
-    } catch (err: any) {
-      console.error('Registration error', err);
-      alert(err?.message || 'Registration failed. See console for details.');
-    } finally {
-      setCheckingStatus(false);
-    }
+    registerMember();
   };
 
   // Animation variants
@@ -427,17 +424,17 @@ export default function Home() {
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   onClick={handleRegister}
-                  disabled={isRegistering}
+                  disabled={isRegistering || isConfirming}
                   className="w-full py-3 rounded-full text-sm font-semibold transition-all bg-white text-black hover:bg-white/90"
                 >
-                  {isRegistering ? (
+                  {isRegistering || isConfirming ? (
                     <div className="flex items-center justify-center gap-2">
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
                         className="w-4 h-4 border-2 border-black/40 border-t-black rounded-full"
                       />
-                      Registering...
+                      {isConfirming ? 'Confirming on chain...' : 'Waiting for signature...'}
                     </div>
                   ) : (
                     'Register'
