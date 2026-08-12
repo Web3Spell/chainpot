@@ -36,12 +36,8 @@ export const config = getDefaultConfig({
 
   ssr: true, // Important for Next.js SSR/App Router
 
-  transports: chains.reduce((acc, chain) => {
-
-    acc[chain.id] = http();
-
-    return acc;
-
-  }, {} as any),
+  transports: {
+    [baseSepolia.id]: http('https://base-sepolia-rpc.publicnode.com'),
+  },
 
 });
