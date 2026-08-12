@@ -240,12 +240,12 @@ Both engines have been deployed and **stress-tested with live transactions** on 
 
 | Contract | Address |
 |---|---|
-| MemberRegistryV4 | `0xDa46dC368c0f425223Ab3CD5B29C518C4aAf807f` |
-| LotteryEngineV4 | `0x0F0df73fFBA5c3D87D397F3d32881C840733d014` |
-| CompoundIntegratorV4 | `0x9461dEA8D92fbcC5df6373b88b0e70D84120D14F` |
-| VaultV4 | `0x7D1F7544B0c7739aE70B5367c79009950Af9D2bd` |
-| CircleEngineV4 (Program A) | `0x9A59D312AfcdbD8b93592830BedE6D85aB865C06` |
-| AuctionEngineV4 (Program B) | `0xa0Aac6806BDe9BD34B1bB53A9FA6c04E19937d7b` |
+| MemberRegistryV4 | `0xF2D5C4Aec34BcB8A5dddC8da1e3d4Ad648085e51` |
+| VRFProviderV4 | `0x845436951F8e7F2E2Dc7d1Da278734829F1c699b` |
+| CompoundIntegratorV4 | `0x7e33e246F8924AE3912D98d76047A91a4b6B75f6` |
+| VaultV4 | `0xDE6520a47cF911F574916323BDDE7E4aff27d72C` |
+| CircleEngineV4 (Program A) | `0x0DC85461a89391D4a14fb04079E80970f898868e` |
+| AuctionEngineV4 (Program B) | `0xCe0E27106528E13B074069D2dB6E5368EA74a7f9` |
 
 External deps: USDC `0x036C…F7e`, Comet USDC `0x5716…f017`, Chainlink VRF V2.5 Coordinator `0x5C21…7BEE`.
 
