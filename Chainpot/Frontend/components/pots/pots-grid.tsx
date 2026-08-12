@@ -34,7 +34,7 @@ function PotItem({ id, engine, isDarkMode }: { id: number; engine: "circle" | "a
 
   const totalAmount = formatUnits(amountPerCycle * BigInt(memberCount), decimals ?? 6);
   const frequency = `${Math.floor(cycleDuration / 86400)} days`;
-  const status = statusRaw === 0 ? 'Pending' : statusRaw === 1 ? 'Active' : 'Completed';
+  const status = statusRaw <= 1 ? 'Pending' : statusRaw === 2 ? 'Active' : 'Completed';
 
   const potDisplay = {
     id,

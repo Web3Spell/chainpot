@@ -22,7 +22,7 @@ function PoolItem({ potId, engine, isDarkMode }: { potId: bigint, engine: "circl
   const amountPerCycle = BigInt((potData as any)[4] || 0);
   const cycleCount = Number((potData as any)[3] || 0);
   const statusRaw = Number((potData as any)[5] || 0);
-  const status = statusRaw === 0 ? 'Pending' : statusRaw === 1 ? 'Active' : 'Completed';
+  const status = statusRaw <= 1 ? 'Pending' : statusRaw === 2 ? 'Active' : 'Completed';
   const totalAmount = formatUnits(amountPerCycle * BigInt(cycleCount), decimals);
   const yieldRate = engine === 'circle' ? 'None' : 'Discount Bids';
 

@@ -49,10 +49,10 @@ export function useGlobalStats() {
         const amountPerCycle = BigInt(res[4]);
         const currentCycle = BigInt(res[6]);
 
-        if (status === 1) { // Active
+        if (status === 2) { // Active
           activePools++;
           activeContributions += amountPerCycle * expectedMembers * (currentCycle > BigInt(0) ? currentCycle : BigInt(1));
-        } else if (status === 2) { // Completed
+        } else if (status === 3) { // Completed
           completedPools++;
         }
       }
