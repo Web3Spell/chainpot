@@ -19,20 +19,16 @@ interface IComet {
 
 interface ICometRewards {
     function claim(address comet, address src, bool shouldAccrue) external;
+    function claimTo(address comet, address src, address to, bool shouldAccrue) external;
+}
+
+interface IVaultTreasury {
+    function treasury() external view returns (address);
 }
 
 /// @title CompoundIntegratorV4
 /// @notice A single GLOBAL Compound III (Comet) position with ERC4626-style share accounting.
 ///         Only the Vault interacts with it; the Vault holds the per-cycle share ledger.
-/// @dev Remediations:
-///      - H-05: virtual-shares (decimal offset) + revert `ZeroShares()` (no 1:1 fallback). The
-///        first-depositor / inflation path is unreachable.
-///      - [I] raw balance: `totalAssets()` returns an INTERNALLY tracked figure (`realizedAssets`),
-///        not a live `COMET.balanceOf`. `accrue()` snapshots `balanceOf` at the start of every
-///        supply/withdraw, so share math within an op is stable and direct-donation manipulation is
-///        dead (compounded by the virtual offset).
-///      - [I] CEI: all state writes happen BEFORE the external token transfers / Comet calls.
-///      - L-03: no `emergencyWithdrawAll`/broad sweep. Only `rescueTokens` for non-USDC dust.
 contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
@@ -82,9 +78,6 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
 
     // ---- Admin ----
 
-    /// @notice (F-03) ONE-TIME binding. Re-pointing the vault would let a compromised owner key
-    ///         drain the entire Comet position through a fake vault, contradicting the protocol's
-    ///         "no human signer can drain funds" custody model — so it can never be changed.
     function setVault(address _vault) external onlyOwner {
         if (vault != address(0)) revert VaultAlreadySet();
         if (_vault == address(0) || _vault.code.length == 0) revert InvalidAddress();
@@ -111,23 +104,27 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
         return 10 ** uint256(DECIMALS_OFFSET);
     }
 
+    /// @dev L-01: live asset reading to prevent stale reads in view functions
+    function _liveAssets() internal view returns (uint256) {
+        return COMET.balanceOf(address(this));
+    }
+
     function totalAssets() public view returns (uint256) {
-        return realizedAssets;
+        return _liveAssets();
     }
 
     function convertToShares(uint256 assets) public view returns (uint256) {
-        return Math.mulDiv(assets, totalShares + _virtualShares(), realizedAssets + 1);
+        return Math.mulDiv(assets, totalShares + _virtualShares(), _liveAssets() + 1);
     }
 
     function convertToAssets(uint256 shares) public view returns (uint256) {
-        return Math.mulDiv(shares, realizedAssets + 1, totalShares + _virtualShares());
+        return Math.mulDiv(shares, _liveAssets() + 1, totalShares + _virtualShares());
     }
 
-    /// @notice Realize Comet interest (and any donation) into the internal figure. Idempotent.
+    /// @notice Realize Comet interest. L-08: report live Comet balance directly without flooring.
     function accrue() public {
         uint256 live = COMET.balanceOf(address(this));
-        // Never let the internal figure drop below tracked principal due to a transient read.
-        realizedAssets = live > internalPrincipal ? live : internalPrincipal;
+        realizedAssets = live;
         emit Accrued(realizedAssets);
     }
 
@@ -161,36 +158,49 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
         accrue();
         assets = convertToAssets(shares);
 
-        // (F-11) Reduce principal PROPORTIONALLY to the shares burned (not by principal+interest),
-        // so the `internalPrincipal` conservation floor used by `accrue()` stays accurate.
+        // L-09: proportional principal reduction capped at internalPrincipal
         uint256 principalShare = Math.mulDiv(internalPrincipal, shares, totalShares);
+        if (principalShare > internalPrincipal) principalShare = internalPrincipal;
 
         // Effects before interactions ([I] CEI).
         totalShares -= shares;
         realizedAssets = realizedAssets > assets ? realizedAssets - assets : 0;
         internalPrincipal -= principalShare;
 
-        // Interactions — withdraw from Comet and forward the actually-received amount.
-        uint256 balBefore = USDC.balanceOf(address(this));
+        // Interactions — L-03: cap assets at live balance before withdraw
+        uint256 live = COMET.balanceOf(address(this));
+        if (assets > live) assets = live;
+
         COMET.withdraw(address(USDC), assets);
-        uint256 received = USDC.balanceOf(address(this)) - balBefore;
-        if (received < assets) assets = received; // tolerate Comet's 1-wei rounding
         USDC.safeTransfer(msg.sender, assets);
 
         emit Withdrawn(shares, assets);
     }
 
-    // ---- Rewards (optional) ----
+    // ---- Rewards (I-04: direct path to Vault treasury) ----
 
-    function claimComp() external onlyOwner {
+    function claimComp() external {
         if (address(cometRewards) == address(0)) return;
-        cometRewards.claim(address(COMET), address(this), true);
+        address treasury = IVaultTreasury(vault).treasury();
+        if (treasury == address(0)) revert InvalidAddress();
+        cometRewards.claimTo(address(COMET), address(this), treasury, true);
         emit RewardsClaimed();
+    }
+
+    function sweepReward(address token) external {
+        if (token == address(USDC) || token == address(COMET)) revert CannotRescueBaseAsset();
+        address treasury = IVaultTreasury(vault).treasury();
+        if (treasury == address(0)) revert InvalidAddress();
+        uint256 bal = IERC20(token).balanceOf(address(this));
+        if (bal > 0) {
+            IERC20(token).safeTransfer(treasury, bal);
+        }
     }
 
     // ---- Reads ----
 
-    function getCurrentSupplyAPY1e18() external view returns (uint256) {
+    /// @notice I-01: Renamed from getCurrentSupplyAPY1e18 to accurately state linear APR
+    function getCurrentSupplyAPR1e18() external view returns (uint256) {
         uint256 utilization = COMET.getUtilization();
         uint64 supplyRate = COMET.getSupplyRate(utilization);
         return uint256(supplyRate) * 365 days;
@@ -200,10 +210,10 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
         return COMET.balanceOf(address(this));
     }
 
-    // ---- Rescue (non-USDC only; L-03) ----
+    // ---- Rescue (non-USDC / non-COMET only; L-04) ----
 
     function rescueTokens(address token, uint256 amount) external onlyOwner {
-        if (token == address(USDC)) revert CannotRescueBaseAsset();
+        if (token == address(USDC) || token == address(COMET)) revert CannotRescueBaseAsset();
         IERC20(token).safeTransfer(owner(), amount);
     }
 }

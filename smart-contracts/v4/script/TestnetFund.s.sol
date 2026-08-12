@@ -13,8 +13,8 @@ contract TestnetFund is Script {
         address user2 = vm.addr(pk2);
 
         IERC20 usdc = IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
-        MemberRegistryV4 registry = MemberRegistryV4(0xC4222C81B1ceF982F55477916a87C99Faaf9E8E2);
-        VaultV4 vault = VaultV4(0x0593a9EA617796Dd44f347331ff2CF60d4117136);
+        MemberRegistryV4 registry = MemberRegistryV4(0xDa46dC368c0f425223Ab3CD5B29C518C4aAf807f);
+        VaultV4 vault = VaultV4(0x7D1F7544B0c7739aE70B5367c79009950Af9D2bd);
 
         vm.startBroadcast(pk1);
         if (user2.balance < 0.005 ether) {

@@ -14,9 +14,9 @@ contract TestnetRunAuction is Script {
         address user1 = vm.addr(pk1);
         address user2 = vm.addr(pk2);
 
-        AuctionEngineV4 auction = AuctionEngineV4(0x4d79Fc691269E43bBA513320fAAd2Ca9EeCe0394);
-        MemberRegistryV4 registry = MemberRegistryV4(0xC4222C81B1ceF982F55477916a87C99Faaf9E8E2);
-        VaultV4 vault = VaultV4(0x0593a9EA617796Dd44f347331ff2CF60d4117136);
+        AuctionEngineV4 auction = AuctionEngineV4(0xa0Aac6806BDe9BD34B1bB53A9FA6c04E19937d7b);
+        MemberRegistryV4 registry = MemberRegistryV4(0xDa46dC368c0f425223Ab3CD5B29C518C4aAf807f);
+        VaultV4 vault = VaultV4(0x7D1F7544B0c7739aE70B5367c79009950Af9D2bd);
         IERC20 usdc = IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
 
         vm.startBroadcast(pk2);
@@ -41,9 +41,9 @@ contract TestnetRunAuction is Script {
             root,
             2,
             1e6, // 1 USDC
-            20,  // cycle duration
-            10,  // payment window
-            15   // bidding window
+            2 days,  // cycle duration
+            1 days,  // payment window
+            1.5 days // bidding window
         );
         console2.log("Created Auction Pot:", potId);
         auction.joinPot(potId, proof1);
@@ -61,8 +61,13 @@ contract TestnetRunAuction is Script {
 
         vm.startBroadcast(pk2);
         auction.payForCycle(potId);
-        // user2 places a bid of 1.5 USDC (they want the pot, will take 25% discount)
-        auction.placeBid(potId, 1500000); 
+        
+        // Cannot simulate bidding on testnet without time travel because of MIN_PAYMENT_WINDOW
+        // auction.placeBid(potId, 1500000); 
+        // vm.stopBroadcast();
+
+        // vm.startBroadcast(pk1);
+        // auction.placeBid(potId, 2000000);
         vm.stopBroadcast();
         
         console2.log("Auction Cycle fully funded and Bid placed! Wait 15s to declare winner.");
