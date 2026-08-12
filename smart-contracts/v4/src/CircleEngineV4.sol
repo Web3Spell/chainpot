@@ -51,42 +51,18 @@ contract CircleEngineV4 is RoscaEngineBaseV4 {
 
         _ensureSettled(potId, idx);
 
-        if (perCycleVRF[potId]) {
-            _drawGated(potId, idx); // C-02 gate: 0 -> early, 1 -> direct, >=2 -> VRF
-            return;
-        }
-
-        if (!shuffleReady[potId]) revert ShuffleNotReady();
-        address[] memory order = _computeOrder(potId);
-        uint256 n = order.length;
-        address winner = address(0);
-        for (uint256 i = 0; i < n; i++) {
-            if (_isEligible(potId, idx, order[i])) {
-                winner = order[i];
-                break;
-            }
-        }
-        if (winner == address(0)) {
-            _finalizeNoWinner(potId, idx);
-        } else {
-            _finalizeWinner(potId, idx, winner, c.totalCollected); // full pot to winner
-        }
+        // H-01: Payment-gated draw (0 -> early, 1 -> direct, >=2 -> VRF)
+        _drawGated(potId, idx);
     }
 
     // ---- Hooks ----
 
     function _onStartPot(uint256 potId) internal override {
-        // Default path: one VRF request fixes the winning order. perCycleVRF pots draw per cycle.
-        // (F-02) When a reopened pot restarts, any previous seed is discarded for a fresh request.
-        if (!perCycleVRF[potId]) {
-            shuffleReady[potId] = false;
-            _requestShuffle(potId);
-        }
+        // H-01: Do not request VRF shuffle on unfunded pot start to prevent LINK subscription drain.
     }
 
     function _canStartCycle(uint256 potId) internal view override returns (bool) {
-        if (perCycleVRF[potId]) return true;
-        return shuffleReady[potId];
+        return true;
     }
 
     /// @dev (F-01/F-02) Runs inside the permissionless `finalizeDraw` transaction (full gas budget),

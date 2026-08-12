@@ -135,17 +135,19 @@ contract MemberRegistryV4 is Ownable {
         emit ReputationUpdated(user, p.reputationScore, "participation");
     }
 
-    /// @notice M-02: award bid reputation only when `firstBid` is true (first bid of the cycle).
+    /// @notice M-02 / L-07: award bid reputation on `firstBid`, update lastActivityTimestamp on all accepted bids.
     function updateBidInfo(address user, uint256 potId, uint256 cycleId, uint256 bidAmount, bool didBid, bool firstBid)
         external
         onlyAuthorized
         onlyRegistered(user)
     {
         MemberProfile storage p = memberProfiles[user];
-        if (didBid && firstBid) {
-            p.reputationScore += REPUTATION_BID;
-            p.lastActivityTimestamp = block.timestamp;
-            emit ReputationUpdated(user, p.reputationScore, "bid_placed");
+        if (didBid) {
+            p.lastActivityTimestamp = block.timestamp; // L-07
+            if (firstBid) {
+                p.reputationScore += REPUTATION_BID;
+                emit ReputationUpdated(user, p.reputationScore, "bid_placed");
+            }
         }
         emit BidRecorded(user, potId, cycleId, bidAmount, firstBid);
     }
@@ -178,9 +180,10 @@ contract MemberRegistryV4 is Ownable {
         emit ReputationUpdated(user, p.reputationScore, "default");
     }
 
-    /// @notice L-02: penalize reputation when a member repeatedly leaves before a pot starts.
+    /// @notice L-02 / L-07: penalize reputation and update activity timestamp when a member leaves before start.
     function penalizeLeave(address user, uint256 potId) external onlyAuthorized {
         MemberProfile storage p = memberProfiles[user];
+        p.lastActivityTimestamp = block.timestamp; // L-07
         if (p.reputationScore >= REPUTATION_LEAVE_PENALTY) {
             p.reputationScore -= REPUTATION_LEAVE_PENALTY;
         } else {
