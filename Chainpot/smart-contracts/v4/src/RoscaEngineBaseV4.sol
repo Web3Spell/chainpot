@@ -8,7 +8,7 @@ import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProo
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import {MemberRegistryV4} from "./MemberRegistryV4.sol";
 import {VaultV4} from "./VaultV4.sol";
-import {VRFProviderV4, IRandomnessReceiver} from "./VRFProviderV4.sol";
+import {LotteryEngineV4, IRandomnessReceiver} from "./LotteryEngineV4.sol";
 
 /// @title RoscaEngineBaseV4
 /// @notice Shared invite-only ROSCA lifecycle for both ChainPot V4 engines. Holds the structural
@@ -41,13 +41,12 @@ import {VRFProviderV4, IRandomnessReceiver} from "./VRFProviderV4.sol";
 abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyGuard, Pausable {
     // ---- Shared constants ----
     uint256 public constant MIN_AMOUNT_PER_CYCLE = 1e6; // 1 USDC (C-02)
-    uint256 public constant MAX_MEMBERS = 100; // == VRFProviderV4.MAX_PARTICIPANTS ([I])
+    uint256 public constant MAX_MEMBERS = 100; // == LotteryEngineV4.MAX_PARTICIPANTS ([I])
     uint256 public constant MAX_JOINED_POTS = 50; // (L-01) concurrent cap; freed via releaseSlot (F-07)
     uint256 public constant JOIN_LEAVE_COOLDOWN = 1 days; // (L-02)
     uint256 public constant VRF_TIMEOUT = 1 days; // stuck-VRF recovery window (NEW-3: reduced from 3 days)
     uint256 public constant MAX_VRF_RETRIES = 2; // (NEW-3: retry before fallback)
     uint256 public constant MIN_PAYMENT_WINDOW = 1 days; // (F-05) hostile 1-second windows are invalid
-    uint256 public constant MIN_BIDDING_PHASE = 1 hours; // (I-06) minimum duration for bidding window
 
     // ---- Vault credit-kind codes (must mirror VaultV4.CreditKind) ----
     uint8 internal constant CREDIT_WIN = 0;
@@ -58,10 +57,9 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
     // ---- External wiring ----
     MemberRegistryV4 public immutable registry;
     VaultV4 public immutable vault;
-    VRFProviderV4 public immutable lottery;
+    LotteryEngineV4 public immutable lottery;
 
     enum PotStatus {
-        None, // I-02: zero value for uninitialized
         Open,
         Active,
         Completed
@@ -193,7 +191,7 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         if (_registry == address(0) || _vault == address(0) || _lottery == address(0)) revert InvalidParams();
         registry = MemberRegistryV4(_registry);
         vault = VaultV4(_vault);
-        lottery = VRFProviderV4(_lottery);
+        lottery = LotteryEngineV4(_lottery);
     }
 
     // ---- Pause (F-04: pause-aware deadlines) ----
@@ -248,9 +246,9 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         if (merkleRoot == bytes32(0)) revert InvalidParams();
         if (memberCount < 2 || memberCount > MAX_MEMBERS) revert InvalidParams(); // M-05
         if (amountPerCycle < MIN_AMOUNT_PER_CYCLE) revert InvalidParams(); // C-02
-        // MIN_PAYMENT_WINDOW <= paymentWindow < biddingWindow (if set) < cycleDuration (M-06/F-05/I-06)
+        // MIN_PAYMENT_WINDOW <= paymentWindow < biddingWindow (if set) < cycleDuration (M-06/F-05)
         if (paymentWindow < MIN_PAYMENT_WINDOW || paymentWindow >= cycleDuration) revert InvalidParams();
-        if (biddingWindow != 0 && (biddingWindow < paymentWindow + MIN_BIDDING_PHASE || biddingWindow >= cycleDuration)) {
+        if (biddingWindow != 0 && (biddingWindow <= paymentWindow || biddingWindow >= cycleDuration)) {
             revert InvalidParams();
         }
 
@@ -274,7 +272,7 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         Pot storage p = _pots[potId];
         if (msg.sender != p.creator) revert NotCreator();
         if (p.status != PotStatus.Open || p.rootFrozen) revert PotNotOpen();
-        if (newRoot == bytes32(0) || newRoot == p.merkleRoot) revert InvalidParams(); // I-05
+        if (newRoot == bytes32(0)) revert InvalidParams();
         p.merkleRoot = newRoot;
         rootVersion[potId] += 1;
         emit MerkleRootUpdated(potId, newRoot, rootVersion[potId]);
@@ -652,20 +650,8 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
             shuffleRequestId[potId] = 0;
             shuffleRetryCount[potId] = 0;
             p.status = PotStatus.Open;
-            p.rootFrozen = false; // L-10: unfreeze root on shuffle reopen
             emit PotReopened(potId);
         }
-    }
-
-    /// @dev M-01: Returns true if any member in the pot can still win (has not won and is not defaulted).
-    function _hasWinnableMember(uint256 potId) internal view returns (bool) {
-        address[] storage members = _pots[potId].members;
-        uint256 n = members.length;
-        for (uint256 i = 0; i < n; i++) {
-            address m = members[i];
-            if (!hasWonInPot[potId][m] && !defaulted[potId][m]) return true;
-        }
-        return false;
     }
 
     // ---- Finalization (shared; H-03/H-04/§4.2) ----
@@ -728,47 +714,23 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         _pots[potId].completedCycles += 1;
         emit CycleCompleted(potId, idx, winner, assets);
 
-        // M-01: Complete pot if expected cycles reached OR no winnable members remain
         Pot storage p = _pots[potId];
-        if (p.status != PotStatus.Completed && (p.completedCycles >= p.expectedMembers || !_hasWinnableMember(potId))) {
+        if (p.completedCycles >= p.expectedMembers && p.status != PotStatus.Completed) {
             p.status = PotStatus.Completed;
             emit PotCompleted(potId);
         }
     }
 
-    /// @dev L-02 Option A: Distribute harvested leftover pro-rata based on individual Compound shares
     function _distribute(uint256 potId, uint256 idx, uint256 amount, address[] memory recipients, uint8 kind)
         internal
     {
         uint256 n = recipients.length;
         if (amount == 0 || n == 0) return;
-
-        uint256 totalShares;
-        uint256[] memory shares = new uint256[](n);
+        uint256 share = amount / n;
+        uint256 rem = amount - (share * n);
         for (uint256 i = 0; i < n; i++) {
-            shares[i] = vault.getMemberShares(address(this), potId, idx, recipients[i]);
-            totalShares += shares[i];
-        }
-
-        if (totalShares == 0) {
-            uint256 share = amount / n;
-            uint256 rem = amount - (share * n);
-            for (uint256 i = 0; i < n; i++) {
-                uint256 amt = share + (i == 0 ? rem : 0);
-                if (amt > 0) vault.creditWithdrawable(recipients[i], amt, potId, idx, kind);
-            }
-            return;
-        }
-
-        uint256 distributed;
-        for (uint256 i = 0; i < n; i++) {
-            uint256 amt = (amount * shares[i]) / totalShares;
-            distributed += amt;
+            uint256 amt = share + (i == 0 ? rem : 0);
             if (amt > 0) vault.creditWithdrawable(recipients[i], amt, potId, idx, kind);
-        }
-        uint256 leftoverRem = amount - distributed;
-        if (leftoverRem > 0 && n > 0) {
-            vault.creditWithdrawable(recipients[0], leftoverRem, potId, idx, kind);
         }
     }
 

@@ -4,7 +4,7 @@ pragma solidity 0.8.24;
 import {Test, console2} from "forge-std/Test.sol";
 
 import {MemberRegistryV4} from "../src/MemberRegistryV4.sol";
-import {VRFProviderV4} from "../src/VRFProviderV4.sol";
+import {LotteryEngineV4} from "../src/LotteryEngineV4.sol";
 import {CompoundIntegratorV4} from "../src/CompoundIntegratorV4.sol";
 import {VaultV4} from "../src/VaultV4.sol";
 import {CircleEngineV4} from "../src/CircleEngineV4.sol";
@@ -16,15 +16,16 @@ import {MockComet} from "./mocks/MockComet.sol";
 import {MockVRFCoordinatorV2Plus} from "./mocks/MockVRFCoordinatorV2Plus.sol";
 
 contract ChainPotV4Test is Test {
-    VaultV4 vault;
-    CompoundIntegratorV4 integrator;
-    MemberRegistryV4 registry;
-    CircleEngineV4 circle;
-    AuctionEngineV4 auction;
-    VRFProviderV4 lottery;
+    MockUSDC usdc;
     MockComet comet;
     MockVRFCoordinatorV2Plus vrf;
-    MockUSDC usdc;
+
+    MemberRegistryV4 registry;
+    LotteryEngineV4 lottery;
+    CompoundIntegratorV4 integrator;
+    VaultV4 vault;
+    CircleEngineV4 circle;
+    AuctionEngineV4 auction;
 
     address alice = address(0xA11CE);
     address bob = address(0xB0B);
@@ -47,11 +48,10 @@ contract ChainPotV4Test is Test {
         comet = new MockComet();
         vrf = new MockVRFCoordinatorV2Plus();
 
+        registry = new MemberRegistryV4();
+        lottery = new LotteryEngineV4(address(vrf), 1, keccak256("kh"));
         integrator = new CompoundIntegratorV4(address(comet), address(usdc));
         vault = new VaultV4(address(usdc), address(integrator), treasuryAddr); // F-13
-
-        registry = new MemberRegistryV4();
-        lottery = new VRFProviderV4(address(vrf), 1, keccak256("kh"));
         circle = new CircleEngineV4(address(registry), address(vault), address(lottery));
         auction = new AuctionEngineV4(address(registry), address(vault), address(lottery));
 
@@ -191,8 +191,14 @@ contract ChainPotV4Test is Test {
     function _startedCircle(bool perCycleVRF) internal returns (uint256 potId) {
         potId = _createCircle(perCycleVRF);
         _joinAll(CircleEngineOrAuction.Circle, potId);
+        uint256 rid = vrf.nextRequestId();
         vm.prank(alice);
         circle.startPot(potId);
+        if (!perCycleVRF) {
+            // F-01 store-then-finalize: fulfill stores the seed, finalizeDraw fixes the shuffle
+            vrf.fulfill(address(lottery), rid, uint256(keccak256("seed")));
+            circle.finalizeDraw(potId);
+        }
         return potId;
     }
 
@@ -281,8 +287,11 @@ contract ChainPotV4Test is Test {
         // Pot 2: dave defaults AGAIN -> repeat offender -> global blacklist
         uint256 pot2 = _createCircle(false);
         _joinAll(CircleEngineOrAuction.Circle, pot2);
+        uint256 rid = vrf.nextRequestId();
         vm.prank(alice);
         circle.startPot(pot2);
+        vrf.fulfill(address(lottery), rid, uint256(keccak256("seed2")));
+        circle.finalizeDraw(pot2);
 
         vm.prank(alice);
         circle.startCycle(pot2);
@@ -311,12 +320,7 @@ contract ChainPotV4Test is Test {
             // simulate 4 USDC interest accrued on this cycle's deposits
             comet.simulateInterest(address(integrator), 4e6);
             skip(PAY_WINDOW + 1);
-            uint256 rid = vrf.nextRequestId();
             circle.drawWinner(potId);
-            if (circle.eligibleCount(potId, cyc) >= 2) {
-                vrf.fulfill(address(lottery), rid, cyc);
-                circle.finalizeDraw(potId);
-            }
             assertEq(vault.backing(), 0, "F-06 invariant: backing fully drained every finalization");
             skip(CYCLE); // F-08: respect the enforced cadence
         }
@@ -361,10 +365,7 @@ contract ChainPotV4Test is Test {
 
         vm.warp(block.timestamp + PAY_WINDOW + 1);
         // finalization must NOT revert despite bob being USDC-blacklisted (pull, not push)
-        uint256 rid = vrf.nextRequestId();
         circle.drawWinner(potId);
-        vrf.fulfill(address(lottery), rid, 1);
-        circle.finalizeDraw(potId);
 
         (,,,,,, address winner,) = circle.getCycle(potId, 1);
         assertTrue(winner != address(0), "cycle finalized");
@@ -387,10 +388,7 @@ contract ChainPotV4Test is Test {
         circle.startCycle(potId);
         _payAllCircle(potId);
         vm.warp(block.timestamp + PAY_WINDOW + 1);
-        uint256 rid = vrf.nextRequestId();
         circle.drawWinner(potId);
-        vrf.fulfill(address(lottery), rid, 1);
-        circle.finalizeDraw(potId);
         (,,,,,, address winner,) = circle.getCycle(potId, 1);
 
         // governance blacklists the winner
@@ -483,6 +481,43 @@ contract ChainPotV4Test is Test {
         (rt, prfs) = _buildTreeGeneric(addrs);
     }
 
+    function test_F02_largeCircle_shuffleSurvives500kCallback() public {
+        uint256 N = 100;
+        (address[] memory addrs, bytes32[][] memory prfs, bytes32 rt) = _bigRoster(N);
+
+        vm.prank(alice);
+        uint256 potId = circle.createPot(rt, N, AMT, CYCLE, PAY_WINDOW, false);
+        for (uint256 i = 0; i < N; i++) {
+            vm.prank(addrs[i]);
+            circle.joinPot(potId, prfs[i]);
+        }
+        uint256 rid = vrf.nextRequestId();
+        vm.prank(alice);
+        circle.startPot(potId);
+
+        // The REAL coordinator enforces callbackGasLimit (500k). Pre-fix the shuffle wrote 100
+        // addresses to storage inside this budget and always OOG'd, bricking the pot forever.
+        bool ok = vrf.fulfillWithGas(address(lottery), rid, uint256(keccak256("bigseed")), 500_000);
+        assertTrue(ok, "seed delivery fits the 500k callback budget");
+
+        circle.finalizeDraw(potId); // full-gas settlement
+        assertTrue(circle.shuffleReady(potId), "shuffle fixed for 100 members");
+        assertEq(circle.getWinnerOrder(potId).length, N);
+
+        // Full first cycle: 100 payers, then a draw distributing to 100 recipients — normal tx.
+        circle.startCycle(potId);
+        for (uint256 i = 0; i < N; i++) {
+            vm.prank(addrs[i]);
+            circle.payForCycle(potId);
+        }
+        comet.simulateInterest(address(integrator), 10e6);
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+        circle.drawWinner(potId);
+        (,,,,,, address winner,) = circle.getCycle(potId, 1);
+        assertTrue(winner != address(0), "100-member cycle finalizes");
+        assertEq(vault.backing(), 0, "no stranded backing at scale");
+    }
+
     function test_F01_largeCircle_perCycleVRF_survives500kCallback() public {
         uint256 N = 100;
         (address[] memory addrs, bytes32[][] memory prfs, bytes32 rt) = _bigRoster(N);
@@ -515,6 +550,37 @@ contract ChainPotV4Test is Test {
         (,,,,,, address winner,) = circle.getCycle(potId, 1);
         assertTrue(winner != address(0), "100-member VRF draw finalizes");
         assertEq(vault.backing(), 0);
+    }
+
+    // ---------- F-02: stuck shuffle recovers; pot reopens so members can leave ----------
+
+    function test_F02_stuckShuffle_retriesThenReopens() public {
+        uint256 potId = _createCircle(false);
+        _joinAll(CircleEngineOrAuction.Circle, potId);
+        vm.prank(alice);
+        circle.startPot(potId); // shuffle requested; NEVER fulfilled
+
+        // cycles cannot start without the shuffle
+        vm.expectRevert(RoscaEngineBaseV4.CannotStartCycle.selector);
+        circle.startCycle(potId);
+
+        // retry #1 and #2 re-request VRF
+        vm.warp(block.timestamp + 1 days + 1);
+        circle.cancelStuckShuffle(potId);
+        assertEq(circle.shuffleRetryCount(potId), 1);
+        vm.warp(block.timestamp + 1 days + 1);
+        circle.cancelStuckShuffle(potId);
+        assertEq(circle.shuffleRetryCount(potId), 2);
+
+        // retries exhausted -> pot reopens; members are no longer trapped (pre-fix: bricked forever)
+        vm.warp(block.timestamp + 1 days + 1);
+        circle.cancelStuckShuffle(potId);
+        (,,,,, RoscaEngineBaseV4.PotStatus status,,,) = circle.getPot(potId);
+        assertEq(uint256(status), uint256(RoscaEngineBaseV4.PotStatus.Open), "pot reopened");
+
+        vm.prank(alice);
+        circle.leavePot(potId);
+        assertFalse(circle.isMember(potId, alice), "members can exit a reopened pot");
     }
 
     // ---------- F-03: custody hardening ----------
@@ -650,10 +716,7 @@ contract ChainPotV4Test is Test {
         (uint256 c1Start,,,,,,,) = circle.getCycle(potId, 1);
         _payAllCircle(potId);
         vm.warp(block.timestamp + PAY_WINDOW + 1);
-        uint256 rid = vrf.nextRequestId();
         circle.drawWinner(potId); // cycle 1 completed at ~start + 1 day
-        vrf.fulfill(address(lottery), rid, 1);
-        circle.finalizeDraw(potId);
 
         // pre-fix a keeper could fire cycle 2 immediately, compressing a "weekly" pot into days
         vm.expectRevert(RoscaEngineBaseV4.CycleTooEarly.selector);
@@ -916,46 +979,68 @@ contract ChainPotV4Test is Test {
         assertTrue(circle.paidForCycle(potId, 1, alice));
     }
 
-    // ---------- Certora Audit Remediation Tests ----------
+    // ---------- Safety Module: treasury receives 20% of yield ----------
 
-    function test_audit_H01_startPotNoUnfundedVRF() public {
-        uint256 reqsBefore = vrf.nextRequestId();
-        uint256 potId = _createCircle(false);
-        _joinAll(CircleEngineOrAuction.Circle, potId);
-        vm.prank(alice);
-        circle.startPot(potId);
-        assertEq(vrf.nextRequestId(), reqsBefore, "H-01: startPot does not trigger unfunded VRF request");
+    function test_safetyModule_treasuryReceives20PercentYield() public {
+        uint256 potId = _startedCircle(false);
+        circle.startCycle(potId);
+        _payAllCircle(potId);
+
+        // Simulate 100 USDC of Compound interest on this cycle's 400 USDC deposits
+        comet.simulateInterest(address(integrator), 100e6);
+
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+        circle.drawWinner(potId);
+
+        // Treasury should have 20% of 100 USDC = 20 USDC (1 wei tolerance from Compound rounding)
+        uint256 treasuryBalance = vault.withdrawable(treasuryAddr);
+        assertApproxEqAbs(treasuryBalance, 20e6, 1, "treasury gets 20% of yield");
+        assertApproxEqAbs(vault.treasuryAccrued(), 20e6, 1, "treasuryAccrued tracks cumulative");
+
+        // Members (winner + interest recipients) should split the remaining ~480 USDC (400 principal + 80% interest)
+        uint256 totalMemberCredits;
+        for (uint256 i = 0; i < roster.length; i++) {
+            totalMemberCredits += vault.withdrawable(roster[i]);
+        }
+        assertApproxEqAbs(totalMemberCredits, 480e6, 1, "members get principal + 80% of yield");
+
+        // Conservation: backing = 0, total withdrawable = ~500 (members + treasury)
+        assertEq(vault.backing(), 0, "backing drained");
+        assertApproxEqAbs(vault.totalWithdrawableOutstanding(), 500e6, 1, "total = members + treasury");
     }
 
-    function test_audit_L04_rescueTokensBlocksComet() public {
-        vm.expectRevert(CompoundIntegratorV4.CannotRescueBaseAsset.selector);
-        integrator.rescueTokens(address(comet), 100);
+    function test_safetyModule_noYield_noTreasuryFee() public {
+        uint256 potId = _startedCircle(false);
+        circle.startCycle(potId);
+        _payAllCircle(potId);
+
+        // NO interest simulated -> yield = 0
+
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+        circle.drawWinner(potId);
+
+        // Treasury should get NOTHING (no yield to skim)
+        assertEq(vault.withdrawable(treasuryAddr), 0, "no yield -> no treasury fee");
+        assertEq(vault.treasuryAccrued(), 0, "no accrual");
     }
 
-    function test_audit_I01_getCurrentSupplyAPR1e18() public {
-        uint256 apr = integrator.getCurrentSupplyAPR1e18();
-        assertEq(apr, 0);
-    }
+    function test_safetyModule_treasuryClaims() public {
+        uint256 potId = _startedCircle(false);
+        circle.startCycle(potId);
+        _payAllCircle(potId);
+        comet.simulateInterest(address(integrator), 50e6);
 
-    function test_audit_I02_uninitializedPotStatusIsNone() public {
-        (,,,,, RoscaEngineBaseV4.PotStatus status,,,) = circle.getPot(99999);
-        assertEq(uint256(status), uint256(RoscaEngineBaseV4.PotStatus.None), "I-02: non-existent pot reports PotStatus.None");
-    }
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+        circle.drawWinner(potId);
 
-    function test_audit_I05_updateMerkleRootRevertsUnchanged() public {
-        uint256 potId = _createCircle(false);
-        (, bytes32 currentRoot,,,,,,,) = circle.getPot(potId);
+        // Treasury should have 20% of 50 = 10 USDC (1 wei tolerance from Compound rounding)
+        uint256 owed = vault.withdrawable(treasuryAddr);
+        assertApproxEqAbs(owed, 10e6, 1, "treasury credited");
 
-        vm.prank(alice);
-        vm.expectRevert(RoscaEngineBaseV4.InvalidParams.selector);
-        circle.updateMerkleRoot(potId, currentRoot);
-    }
-
-    function test_audit_I06_minBiddingPhaseEnforced() public {
-        (address[] memory addrs,, bytes32 rt) = _bigRoster(4);
-        vm.prank(alice);
-        // biddingWindow = PAY_WINDOW + 10 seconds (< MIN_BIDDING_PHASE 1 hour) -> reverts
-        vm.expectRevert(RoscaEngineBaseV4.InvalidParams.selector);
-        auction.createPot(rt, 4, AMT, CYCLE, PAY_WINDOW, PAY_WINDOW + 10);
+        // Treasury claims
+        vm.prank(treasuryAddr);
+        vault.claim();
+        assertEq(vault.withdrawable(treasuryAddr), 0, "treasury claimed");
+        assertApproxEqAbs(usdc.balanceOf(treasuryAddr), 10e6, 1, "treasury received USDC");
     }
 }

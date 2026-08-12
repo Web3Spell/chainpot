@@ -6,13 +6,36 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {CompoundIntegratorV4} from "./CompoundIntegratorV4.sol";
 
 /// @title VaultV4
 /// @notice Holds member contributions, supplies them to Compound via the integrator, and pays out
 ///         via a GLOBAL pull ledger. Shared by both engines; every per-cycle mapping is namespaced
 ///         by the calling engine (`msg.sender`) so the two engines can never collide on IDs.
+/// @dev Remediations:
+///      - H-04: pull over push. Finalization CREDITS `withdrawable[recipient]`; `claim()` is the only
+///        transfer. One USDC-blacklisted recipient can never brick finalization.
+///      - Invariant #11: `claim()`/`claimFor()` are NOT gated by any blacklist — already-earned funds
+///        are always withdrawable by their owner.
+///      - [I] CEI: bookkeeping is written before external token movements.
+///      - L-03: no emergency sweep. Only a timelocked, surplus-only rescue that can never touch
+///        tracked obligations (`backing` + `totalWithdrawableOutstanding`).
+///      - §2.1: `isEngine` multi-engine auth; funds namespaced `funds[engine][pot][cycle]`.
+///      - Safety Module: 20% of Compound yield is routed to a protocol treasury (POL), providing
+///        an insurance backstop that grows with TVL. Treasury claims via the same pull-payment system.
+///
+///      V4.1 security-review remediations (see SECURITY_FIXES_V4_1.md):
+///      - F-03: engine authorization is TIMELOCKED after initial deployment wiring. The owner wires
+///        the two engines, then calls `lockEngineSetup()`; from then on adding an engine requires a
+///        2-day `proposeEngine`/`executeEngine` window that users can observe on-chain. Removals
+///        stay instant (defensive). This closes the "owner authorizes a fake engine and drains
+///        `backing` in one tx" path.
+///      - F-06: `creditToTreasury` gives engines a fallback sink so no harvested value can ever
+///        strand in `backing` when a distribution has zero recipients.
+///      - F-13: the treasury is set in the constructor — the Safety Module can never be silently
+///        skipped by a deploy-ordering mistake.
+///      - UX: `WithdrawableCredited` now carries engine/pot/cycle/kind context so frontends and
+///        indexers can attribute every credit (win vs dividend vs refund vs residual vs treasury).
 contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
@@ -42,7 +65,6 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         uint256 shares; // Comet shares held for this cycle
         bool finalized; // harvested exactly once
         mapping(address => uint256) contributions;
-        mapping(address => uint256) memberShares; // L-02: Option A individual share tracking
     }
 
     // engine => potId => cycleId => funds
@@ -183,7 +205,6 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         USDC.safeTransferFrom(member, address(this), amount);
         uint256 shares = integrator.supply(amount);
         cf.shares += shares;
-        cf.memberShares[member] += shares; // L-02: option A individual share tracking
 
         emit Deposited(msg.sender, potId, cycleId, member, amount, shares);
     }
@@ -214,8 +235,7 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         uint256 treasuryCut;
         if (assets > principal && treasury != address(0)) {
             uint256 interest = assets - principal;
-            // I-03: round fee ceiling upward
-            treasuryCut = Math.mulDiv(interest, TREASURY_FEE_BPS, 10_000, Math.Rounding.Ceil);
+            treasuryCut = (interest * TREASURY_FEE_BPS) / 10_000;
             if (treasuryCut > 0) {
                 // Credit treasury via the same pull-payment system
                 withdrawable[treasury] += treasuryCut;
@@ -233,7 +253,7 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     /// @notice Credit a recipient's pull balance from harvested backing (H-04).
     /// @param kind CreditKind context for frontends/indexers (UX; see enum above).
     function creditWithdrawable(address to, uint256 amount, uint256 potId, uint256 cycleId, uint8 kind)
-        public
+        external
         onlyEngine
     {
         if (to == address(0)) revert InvalidAddress();
@@ -245,12 +265,16 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         emit WithdrawableCredited(to, amount, msg.sender, potId, cycleId, kind);
     }
 
-    /// @notice (F-06 / DR-02) Fallback sink for a finalization with zero recipients — routes the residual
-    ///         to the treasury via creditWithdrawable (DR-02 single credit path).
+    /// @notice (F-06) Fallback sink for a finalization with zero recipients — routes the residual
+    ///         to the treasury so nothing can ever strand in `backing`.
     function creditToTreasury(uint256 amount, uint256 potId, uint256 cycleId) external onlyEngine {
+        if (amount == 0) revert InvalidAmount();
         if (treasury == address(0)) revert TreasuryNotSet();
-        treasuryAccrued += amount;
-        creditWithdrawable(treasury, amount, potId, cycleId, uint8(CreditKind.Treasury));
+        if (backing < amount) revert InsufficientBacking();
+        backing -= amount;
+        withdrawable[treasury] += amount;
+        totalWithdrawableOutstanding += amount;
+        emit WithdrawableCredited(treasury, amount, msg.sender, potId, cycleId, uint8(CreditKind.Treasury));
     }
 
     // ---- Claims (ungated; invariant #11) ----
@@ -312,22 +336,6 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         returns (uint256)
     {
         return funds[engine][potId][cycleId].contributions[member];
-    }
-
-    function getMemberContribution(address engine, uint256 potId, uint256 cycleId, address member)
-        external
-        view
-        returns (uint256)
-    {
-        return funds[engine][potId][cycleId].contributions[member];
-    }
-
-    function getMemberShares(address engine, uint256 potId, uint256 cycleId, address member)
-        external
-        view
-        returns (uint256)
-    {
-        return funds[engine][potId][cycleId].memberShares[member];
     }
 
     /// @notice Total funds owed by the Vault: idle backing + outstanding credits + still-invested value.

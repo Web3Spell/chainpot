@@ -1,0 +1,20 @@
+{
+  "lib/chainlink-brownie-contracts": {
+    "tag": {
+      "name": "1.2.0",
+      "rev": "6e324d8ad9fbb5519186ad9f1eaf99704de4c915"
+    }
+  },
+  "lib/openzeppelin-contracts": {
+    "tag": {
+      "name": "v5.4.0",
+      "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
+    }
+  },
+  "lib/pyth-crosschain": {
+    "tag": {
+      "name": "v2.38.0",
+      "rev": "25ecd01bf7f5ce6e744f6a300b56dc2cdf7e65e6"
+    }
+  }
+}

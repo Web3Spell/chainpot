@@ -4,7 +4,7 @@ pragma solidity 0.8.24;
 import {Script, console2} from "forge-std/Script.sol";
 
 import {MemberRegistryV4} from "../src/MemberRegistryV4.sol";
-import {VRFProviderV4} from "../src/VRFProviderV4.sol";
+import {LotteryEngineV4} from "../src/LotteryEngineV4.sol";
 import {CompoundIntegratorV4} from "../src/CompoundIntegratorV4.sol";
 import {VaultV4} from "../src/VaultV4.sol";
 import {CircleEngineV4} from "../src/CircleEngineV4.sol";
@@ -32,8 +32,8 @@ contract DeployV4 is Script {
         MemberRegistryV4 registry = new MemberRegistryV4();
         console2.log("MemberRegistryV4:", address(registry));
 
-        VRFProviderV4 lottery = new VRFProviderV4(vrfCoordinator, subId, keyHash);
-        console2.log("VRFProviderV4:", address(lottery));
+        LotteryEngineV4 lottery = new LotteryEngineV4(vrfCoordinator, subId, keyHash);
+        console2.log("LotteryEngineV4:", address(lottery));
 
         CompoundIntegratorV4 integrator = new CompoundIntegratorV4(comet, usdc);
         console2.log("CompoundIntegratorV4:", address(integrator));
@@ -65,7 +65,7 @@ contract DeployV4 is Script {
 
         console2.log("---");
         console2.log("Wiring complete. Post-deploy:");
-        console2.log(" 1. Add VRFProviderV4 as a consumer on VRF subscription:", subId);
+        console2.log(" 1. Add LotteryEngineV4 as a consumer on VRF subscription:", subId);
         console2.log("    Consumer:", address(lottery));
         console2.log(" 2. Fund the VRF subscription with LINK.");
         console2.log(" 3. (Prod) Transfer owner()/governance of each contract to a 2/3 multisig + timelock.");

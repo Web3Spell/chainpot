@@ -1,0 +1,27 @@
+[profile.default]
+src = "src"
+out = "out"
+test = "test"
+script = "script"
+solc_version = "0.8.24"
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+
+remappings = [
+    "@openzeppelin/contracts/=/Users/rythme/developer/blockchain/chainpot/smart-contracts/lib/openzeppelin-contracts/contracts/",
+    "@chainlink/contracts/=/Users/rythme/developer/blockchain/chainpot/smart-contracts/lib/chainlink-brownie-contracts/contracts/",
+    "forge-std/=/Users/rythme/developer/blockchain/chainpot/smart-contracts/lib/forge-std/src/"
+]
+
+[rpc_endpoints]
+base_sepolia = "https://sepolia.base.org"
+
+[etherscan]
+base_sepolia = { key = "${BASESCAN_API_KEY}", url = "https://api-sepolia.basescan.org/api", chain = 84532 }
+
+[fmt]
+line_length = 120
+tab_width = 4
+bracket_spacing = false
+int_types = "long"
