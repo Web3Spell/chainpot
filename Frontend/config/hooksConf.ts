@@ -1,5 +1,5 @@
 // V4.1 security fixes — ABIs regenerated from patched v4 contracts.
-// Addresses updated to the latest Base Sepolia deployment (2026-07-10).
+// Addresses updated to the latest Base Sepolia deployment (2026-08-22).
 
 export const CONTRACT_ADDRESSES = {
   memberRegistry: "0x3cC0610EA70bB361Df99C9d9E157250Fd4F3779C",
@@ -10,7 +10,6 @@ export const CONTRACT_ADDRESSES = {
   compoundIntegrator: "0x494fFA9805518a3C54b4D55d9fE447A513f975fD",
   usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
 };
-
 
 export const CONTRACT_ABIS = {
   memberRegistry: [
@@ -988,6 +987,19 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "MIN_BIDDING_PHASE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MIN_PAYMENT_WINDOW",
     "inputs": [],
     "outputs": [
@@ -1011,19 +1023,6 @@ export const CONTRACT_ABIS = {
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "cancelStuckShuffle",
-    "inputs": [
-      {
-        "name": "potId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1066,11 +1065,6 @@ export const CONTRACT_ABIS = {
         "name": "paymentWindow",
         "type": "uint256",
         "internalType": "uint256"
-      },
-      {
-        "name": "_perCycleVRF",
-        "type": "bool",
-        "internalType": "bool"
       }
     ],
     "outputs": [
@@ -1384,25 +1378,6 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
-    "name": "getWinnerOrder",
-    "inputs": [
-      {
-        "name": "potId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address[]",
-        "internalType": "address[]"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "hasWonInPot",
     "inputs": [
       {
@@ -1531,7 +1506,7 @@ export const CONTRACT_ABIS = {
       {
         "name": "",
         "type": "address",
-        "internalType": "contract LotteryEngineV4"
+        "internalType": "contract VRFProviderV4"
       }
     ],
     "stateMutability": "view"
@@ -1646,25 +1621,6 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
-    "name": "perCycleVRF",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "potCounter",
     "inputs": [],
     "outputs": [
@@ -1745,82 +1701,6 @@ export const CONTRACT_ABIS = {
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "shuffleReady",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bool",
-        "internalType": "bool"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "shuffleRequestId",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "shuffleRequestedAt",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "shuffleRetryCount",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -2232,19 +2112,6 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "event",
-    "name": "PotReopened",
-    "inputs": [
-      {
-        "name": "potId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "PotStarted",
     "inputs": [
       {
@@ -2276,19 +2143,6 @@ export const CONTRACT_ABIS = {
         "name": "requestId",
         "type": "uint256",
         "indexed": false,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "ShuffleFixed",
-    "inputs": [
-      {
-        "name": "potId",
-        "type": "uint256",
-        "indexed": true,
         "internalType": "uint256"
       }
     ],
@@ -2454,6 +2308,11 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "MathOverflowedMulDiv",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotAwaitingVRF",
     "inputs": []
   },
@@ -2561,11 +2420,6 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
-    "name": "ShuffleNotReady",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "TimeoutNotReached",
     "inputs": []
   },
@@ -2669,6 +2523,19 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "function",
+    "name": "MIN_BIDDING_PHASE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MIN_BID_STEP_BPS",
     "inputs": [],
     "outputs": [
@@ -2734,19 +2601,6 @@ export const CONTRACT_ABIS = {
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "cancelStuckShuffle",
-    "inputs": [
-      {
-        "name": "potId",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -3264,7 +3118,7 @@ export const CONTRACT_ABIS = {
       {
         "name": "",
         "type": "address",
-        "internalType": "contract LotteryEngineV4"
+        "internalType": "contract VRFProviderV4"
       }
     ],
     "stateMutability": "view"
@@ -3525,63 +3379,6 @@ export const CONTRACT_ABIS = {
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "shuffleRequestId",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "shuffleRequestedAt",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "shuffleRetryCount",
-    "inputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -4024,19 +3821,6 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "event",
-    "name": "PotReopened",
-    "inputs": [
-      {
-        "name": "potId",
-        "type": "uint256",
-        "indexed": true,
-        "internalType": "uint256"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "PotStarted",
     "inputs": [
       {
@@ -4254,6 +4038,11 @@ export const CONTRACT_ABIS = {
   {
     "type": "error",
     "name": "InvalidProof",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MathOverflowedMulDiv",
     "inputs": []
   },
   {
@@ -4670,6 +4459,152 @@ export const CONTRACT_ABIS = {
         "name": "finalized",
         "type": "bool",
         "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getCycleShares",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "totalSharesMinted",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getCycleYieldInfo",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "totalCollected",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "totalSharesMinted",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "harvestedAssets",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "netAssets",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "netYield",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMemberContribution",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "member",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getMemberShares",
+    "inputs": [
+      {
+        "name": "engine",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "potId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "cycleId",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "member",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -5295,6 +5230,28 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "AddressEmptyCode",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AddressInsufficientBalance",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "CycleFinalized",
     "inputs": []
   },
@@ -5320,6 +5277,11 @@ export const CONTRACT_ABIS = {
   },
   {
     "type": "error",
+    "name": "FailedInnerCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InsufficientBacking",
     "inputs": []
   },
@@ -5331,6 +5293,11 @@ export const CONTRACT_ABIS = {
   {
     "type": "error",
     "name": "InvalidAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "MathOverflowedMulDiv",
     "inputs": []
   },
   {
