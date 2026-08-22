@@ -14,10 +14,17 @@ contract TestnetRun is Script {
         address user1 = vm.addr(pk1);
         address user2 = vm.addr(pk2);
 
-        CircleEngineV4 circle = CircleEngineV4(0x0DC85461a89391D4a14fb04079E80970f898868e);
-        MemberRegistryV4 registry = MemberRegistryV4(0xF2D5C4Aec34BcB8A5dddC8da1e3d4Ad648085e51);
-        VaultV4 vault = VaultV4(0xDE6520a47cF911F574916323BDDE7E4aff27d72C);
+        CircleEngineV4 circle = CircleEngineV4(0xE1D5a24AeB77FEe5C41aeFfEB6C70022599c6c74);
+        MemberRegistryV4 registry = MemberRegistryV4(0x3cC0610EA70bB361Df99C9d9E157250Fd4F3779C);
+        VaultV4 vault = VaultV4(0xc02f071236ce39e25659689093011ae95E5C09D1);
         IERC20 usdc = IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
+
+        vm.startBroadcast(pk1);
+        if (!registry.isRegistered(user1)) {
+            registry.registerMember();
+        }
+        usdc.approve(address(vault), type(uint256).max);
+        vm.stopBroadcast();
 
         vm.startBroadcast(pk2);
         if (!registry.isRegistered(user2)) {
@@ -45,8 +52,7 @@ contract TestnetRun is Script {
             2,
             1e6,
             2 days, // cycle duration
-            1 days, // payment window
-            true
+            1 days // payment window
         );
         console2.log("Created Pot:", potId);
         circle.joinPot(potId, proof1);

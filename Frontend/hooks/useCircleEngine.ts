@@ -15,13 +15,12 @@ export function useCreateCirclePot() {
     memberCount: number,
     amountPerCycle: bigint,
     cycleDuration: number,
-    paymentWindow: number,
-    perCycleVRF: boolean
+    paymentWindow: number
   ) => {
     writeContract({
       ...circleConfig,
       functionName: "createPot",
-      args: [merkleRoot, BigInt(memberCount), amountPerCycle, BigInt(cycleDuration), BigInt(paymentWindow), perCycleVRF],
+      args: [merkleRoot, BigInt(memberCount), amountPerCycle, BigInt(cycleDuration), BigInt(paymentWindow)],
     });
   };
 

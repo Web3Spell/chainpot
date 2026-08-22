@@ -34,13 +34,16 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         Refund, // 2: early-completion refund
         Residual, // 3: empty-recipient leftover routed to the winner (F-06)
         Treasury // 4: empty-recipient leftover routed to the treasury (F-06)
-
     }
 
     struct CycleFunds {
         uint256 totalCollected; // principal deposited for this cycle
         uint256 shares; // Comet shares held for this cycle
         bool finalized; // harvested exactly once
+        uint256 totalSharesMinted; // total Comet shares minted for this cycle
+        uint256 harvestedAssets; // gross assets withdrawn from Compound
+        uint256 netAssets; // assets harvested after treasury fee
+        uint256 netYield; // net interest earned above collected principal
         mapping(address => uint256) contributions;
         mapping(address => uint256) memberShares; // L-02: Option A individual share tracking
     }
@@ -183,6 +186,7 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         USDC.safeTransferFrom(member, address(this), amount);
         uint256 shares = integrator.supply(amount);
         cf.shares += shares;
+        cf.totalSharesMinted += shares;
         cf.memberShares[member] += shares; // L-02: option A individual share tracking
 
         emit Deposited(msg.sender, potId, cycleId, member, amount, shares);
@@ -206,9 +210,12 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
         uint256 sh = cf.shares;
         uint256 principal = cf.totalCollected;
         cf.shares = 0;
+        uint256 grossHarvested;
         if (sh > 0) {
-            assets = integrator.withdraw(sh);
+            grossHarvested = integrator.withdraw(sh);
         }
+        assets = grossHarvested;
+        cf.harvestedAssets = grossHarvested;
 
         // Safety Module: skim 20% of yield (interest only, never principal)
         uint256 treasuryCut;
@@ -225,6 +232,9 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
                 emit TreasuryFeeCollected(msg.sender, potId, cycleId, treasuryCut);
             }
         }
+
+        cf.netAssets = assets;
+        cf.netYield = assets > principal ? assets - principal : 0;
 
         backing += assets;
         emit CycleHarvested(msg.sender, potId, cycleId, assets);
@@ -304,6 +314,29 @@ contract VaultV4 is Ownable, ReentrancyGuard, Pausable {
     {
         CycleFunds storage cf = funds[engine][potId][cycleId];
         return (cf.totalCollected, cf.shares, cf.finalized);
+    }
+
+    function getCycleYieldInfo(address engine, uint256 potId, uint256 cycleId)
+        external
+        view
+        returns (
+            uint256 totalCollected,
+            uint256 totalSharesMinted,
+            uint256 harvestedAssets,
+            uint256 netAssets,
+            uint256 netYield
+        )
+    {
+        CycleFunds storage cf = funds[engine][potId][cycleId];
+        return (cf.totalCollected, cf.totalSharesMinted, cf.harvestedAssets, cf.netAssets, cf.netYield);
+    }
+
+    function getCycleShares(address engine, uint256 potId, uint256 cycleId)
+        external
+        view
+        returns (uint256 totalSharesMinted)
+    {
+        return funds[engine][potId][cycleId].totalSharesMinted;
     }
 
     function getContribution(address engine, uint256 potId, uint256 cycleId, address member)

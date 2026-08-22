@@ -159,9 +159,13 @@ contract ChainPotV4Test is Test {
 
     // ---------- Shared flow helpers ----------
 
-    function _createCircle(bool perCycleVRF) internal returns (uint256 potId) {
+    function _createCircle() internal returns (uint256 potId) {
         vm.prank(alice);
-        potId = circle.createPot(root, 4, AMT, CYCLE, PAY_WINDOW, perCycleVRF);
+        potId = circle.createPot(root, 4, AMT, CYCLE, PAY_WINDOW);
+    }
+
+    function _createCircle(bool) internal returns (uint256 potId) {
+        return _createCircle();
     }
 
     function _joinAll(CircleEngineOrAuction kind, uint256 potId) internal {
@@ -188,12 +192,16 @@ contract ChainPotV4Test is Test {
         }
     }
 
-    function _startedCircle(bool perCycleVRF) internal returns (uint256 potId) {
-        potId = _createCircle(perCycleVRF);
+    function _startedCircle() internal returns (uint256 potId) {
+        potId = _createCircle();
         _joinAll(CircleEngineOrAuction.Circle, potId);
         vm.prank(alice);
         circle.startPot(potId);
         return potId;
+    }
+
+    function _startedCircle(bool) internal returns (uint256 potId) {
+        return _startedCircle();
     }
 
     // ---------- C-01: invite gate ----------
@@ -218,7 +226,7 @@ contract ChainPotV4Test is Test {
     function test_M05_createRejectsBadMemberCount() public {
         vm.prank(alice);
         vm.expectRevert(RoscaEngineBaseV4.InvalidParams.selector);
-        circle.createPot(root, 1, AMT, CYCLE, PAY_WINDOW, false);
+        circle.createPot(root, 1, AMT, CYCLE, PAY_WINDOW);
     }
 
     function test_M05_startRevertsIfRosterIncomplete() public {
@@ -488,7 +496,7 @@ contract ChainPotV4Test is Test {
         (address[] memory addrs, bytes32[][] memory prfs, bytes32 rt) = _bigRoster(N);
 
         vm.prank(alice);
-        uint256 potId = circle.createPot(rt, N, AMT, CYCLE, PAY_WINDOW, true); // perCycleVRF
+        uint256 potId = circle.createPot(rt, N, AMT, CYCLE, PAY_WINDOW);
         for (uint256 i = 0; i < N; i++) {
             vm.prank(addrs[i]);
             circle.joinPot(potId, prfs[i]);
@@ -580,7 +588,7 @@ contract ChainPotV4Test is Test {
     function test_F05_minPaymentWindowEnforced() public {
         vm.prank(alice);
         vm.expectRevert(RoscaEngineBaseV4.InvalidParams.selector);
-        circle.createPot(root, 4, AMT, CYCLE, 1 hours, false); // hostile 1-hour window rejected
+        circle.createPot(root, 4, AMT, CYCLE, 1 hours); // hostile 1-hour window rejected
     }
 
     // ---------- F-06: residual value can never strand in backing ----------
@@ -842,7 +850,7 @@ contract ChainPotV4Test is Test {
         assertApproxEqAbs(got, 500e6, 1);
     }
 
-    // ---------- F-11: principal accounting stays proportional on withdraw ----------
+    // ---------- F-11 / L-09: proportional withdrawal & asset conservation ----------
 
     function test_F11_internalPrincipalProportionalOnWithdraw() public {
         CompoundIntegratorV4 ig = new CompoundIntegratorV4(address(comet), address(usdc));
@@ -851,13 +859,139 @@ contract ChainPotV4Test is Test {
         usdc.approve(address(ig), type(uint256).max);
 
         uint256 s1 = ig.supply(1_000e6);
-        ig.supply(1_000e6);
+        uint256 s2 = ig.supply(1_000e6);
         comet.simulateInterest(address(ig), 500e6); // +25% yield
 
-        // withdraw half the shares -> principal floor must drop by ~half the PRINCIPAL (1000),
-        // not by principal+interest (1250, the pre-fix behavior that eroded the floor)
-        ig.withdraw(s1);
-        assertApproxEqAbs(ig.internalPrincipal(), 1_000e6, 2, "principal reduced proportionally");
+        uint256 out1 = ig.withdraw(s1);
+        assertApproxEqAbs(out1, 1_250e6, 2, "first withdraw gets pro-rata assets + interest");
+        assertApproxEqAbs(ig.totalAssets(), 1_250e6, 2, "remaining assets conserved");
+        assertEq(ig.totalShares(), s2, "remaining shares matches s2");
+    }
+
+    // ---------- I-04: sweepReward is onlyOwner restricted ----------
+
+    function test_I04_sweepReward_onlyOwner() public {
+        CompoundIntegratorV4 ig = new CompoundIntegratorV4(address(comet), address(usdc));
+        ig.setVault(address(vault));
+        MockUSDC extraToken = new MockUSDC();
+        extraToken.mint(address(ig), 100e6);
+
+        // Non-owner should revert
+        vm.prank(eve);
+        vm.expectRevert();
+        ig.sweepReward(address(extraToken));
+
+        // Owner can sweep
+        ig.sweepReward(address(extraToken));
+        assertEq(extraToken.balanceOf(vault.treasury()), 100e6);
+    }
+
+    // ---------- L-02: time-weighted yield distribution ----------
+
+    function test_L02_timeWeightedYieldDistribution() public {
+        uint256 potId = _startedCircle();
+        circle.startCycle(potId);
+
+        // Alice pays early
+        vm.prank(alice);
+        circle.payForCycle(potId);
+
+        // Yield accrues while only Alice is deposited
+        comet.simulateInterest(address(integrator), 100e6);
+
+        // Bob pays later (higher share price -> fewer shares minted)
+        vm.prank(bob);
+        circle.payForCycle(potId);
+
+        // More yield accrues
+        comet.simulateInterest(address(integrator), 100e6);
+
+        // Carol and Dave pay
+        vm.prank(carol);
+        circle.payForCycle(potId);
+        vm.prank(dave);
+        circle.payForCycle(potId);
+
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+        uint256 reqId = vrf.nextRequestId();
+        circle.drawWinner(potId);
+        vrf.fulfill(address(lottery), reqId, 0); // alice wins
+        circle.finalizeDraw(potId);
+
+        // Alice should have received more yield than Bob, who received more yield than Carol/Dave
+        uint256 aliceShares = vault.getMemberShares(address(circle), potId, 1, alice);
+        uint256 bobShares = vault.getMemberShares(address(circle), potId, 1, bob);
+        uint256 carolShares = vault.getMemberShares(address(circle), potId, 1, carol);
+
+        assertTrue(aliceShares > bobShares, "early payer got more shares");
+        assertTrue(bobShares > carolShares, "mid payer got more shares than late payer");
+    }
+
+    function test_L02_zeroYield_noRevert_and_exactConservation() public {
+        uint256 potId = _startedCircle();
+        circle.startCycle(potId);
+
+        _payAllCircle(potId);
+        // NO interest simulated -> totalGrossYield == 0
+
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+        uint256 reqId = vrf.nextRequestId();
+        circle.drawWinner(potId);
+        vrf.fulfill(address(lottery), reqId, 0); // alice wins
+        circle.finalizeDraw(potId);
+
+        // Alice receives exactly 4 * AMT = 400e6
+        assertEq(vault.withdrawable(alice), 4 * AMT, "winner gets exact principal pot");
+        assertEq(vault.backing(), 0, "no funds stranded in backing on zero yield");
+    }
+
+    function test_L02_zeroYield_refund_noRevert() public {
+        uint256 potId = _startedCircle();
+        circle.startCycle(potId);
+
+        // Cycle 1: All pay, Alice wins
+        _payAllCircle(potId);
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+        uint256 reqId = vrf.nextRequestId();
+        circle.drawWinner(potId);
+        vrf.fulfill(address(lottery), reqId, 0); // Alice wins
+        circle.finalizeDraw(potId);
+
+        // Cycle 2: Wait until cycle 1 duration elapses (F-08 cadence)
+        vm.warp(block.timestamp + CYCLE);
+        circle.startCycle(potId);
+        vm.prank(alice);
+        circle.payForCycle(potId);
+        vm.warp(block.timestamp + PAY_WINDOW + 1);
+
+        // 0 eligible (Alice already won, others didn't pay) -> early completion refund
+        circle.drawWinner(potId);
+
+        // Alice is credited her 400e6 win from C1 + 100e6 refund from C2 = 500e6
+        assertEq(vault.withdrawable(alice), 500e6, "refund credited without revert");
+        assertEq(vault.backing(), 0, "no funds stranded in backing on zero-yield refund");
+    }
+
+    function test_L02_auctionDiscount_with_zeroYield() public {
+        uint256 potId = _startedAuction();
+        // Alice bids 300e6 (out of 400e6 collected, discount is 100e6)
+        vm.prank(alice);
+        auction.placeBid(potId, 300e6);
+
+        vm.warp(block.timestamp + BID_WINDOW + 1);
+        // NO interest simulated -> totalGrossYield == 0, discount == 100e6
+        auction.declareWinner(potId);
+
+        // Alice won 300e6
+        assertEq(vault.withdrawable(alice), 300e6, "winner gets bid amount");
+
+        // Remaining 3 members (bob, carol, dave) receive 100e6 / 3 each + remainder
+        uint256 bBal = vault.withdrawable(bob);
+        uint256 cBal = vault.withdrawable(carol);
+        uint256 dBal = vault.withdrawable(dave);
+
+        assertEq(bBal + cBal + dBal, 100e6, "discount exactly distributed to non-winners with zero yield");
+        assertEq(vault.backing(), 0, "no backing stranded");
     }
 
     // ---------- M-02: repeat bids gain no reputation ----------
@@ -932,12 +1066,12 @@ contract ChainPotV4Test is Test {
         integrator.rescueTokens(address(comet), 100);
     }
 
-    function test_audit_I01_getCurrentSupplyAPR1e18() public {
+    function test_audit_I01_getCurrentSupplyAPR1e18() public view {
         uint256 apr = integrator.getCurrentSupplyAPR1e18();
         assertEq(apr, 0);
     }
 
-    function test_audit_I02_uninitializedPotStatusIsNone() public {
+    function test_audit_I02_uninitializedPotStatusIsNone() public view {
         (,,,,, RoscaEngineBaseV4.PotStatus status,,,) = circle.getPot(99999);
         assertEq(uint256(status), uint256(RoscaEngineBaseV4.PotStatus.None), "I-02: non-existent pot reports PotStatus.None");
     }
@@ -952,7 +1086,7 @@ contract ChainPotV4Test is Test {
     }
 
     function test_audit_I06_minBiddingPhaseEnforced() public {
-        (address[] memory addrs,, bytes32 rt) = _bigRoster(4);
+        (,, bytes32 rt) = _bigRoster(4);
         vm.prank(alice);
         // biddingWindow = PAY_WINDOW + 10 seconds (< MIN_BIDDING_PHASE 1 hour) -> reverts
         vm.expectRevert(RoscaEngineBaseV4.InvalidParams.selector);

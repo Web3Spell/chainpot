@@ -42,8 +42,6 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
     uint256 public realizedAssets;
     /// @notice Total shares minted across all cycles (the Vault tracks the per-cycle breakdown).
     uint256 public totalShares;
-    /// @notice Net principal contributed (informational / conservation floor).
-    uint256 public internalPrincipal;
 
     /// @notice H-05: OZ virtual-shares exponent. 10**3 virtual shares & 1 virtual asset.
     uint8 public constant DECIMALS_OFFSET = 3;
@@ -140,7 +138,6 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
 
         // Effects before interactions ([I] CEI).
         totalShares += shares;
-        internalPrincipal += amount;
         realizedAssets += amount;
 
         // Interactions.
@@ -158,14 +155,9 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
         accrue();
         assets = convertToAssets(shares);
 
-        // L-09: proportional principal reduction capped at internalPrincipal
-        uint256 principalShare = Math.mulDiv(internalPrincipal, shares, totalShares);
-        if (principalShare > internalPrincipal) principalShare = internalPrincipal;
-
         // Effects before interactions ([I] CEI).
         totalShares -= shares;
         realizedAssets = realizedAssets > assets ? realizedAssets - assets : 0;
-        internalPrincipal -= principalShare;
 
         // Interactions — L-03: cap assets at live balance before withdraw
         uint256 live = COMET.balanceOf(address(this));
@@ -187,7 +179,7 @@ contract CompoundIntegratorV4 is Ownable, ReentrancyGuard, Pausable {
         emit RewardsClaimed();
     }
 
-    function sweepReward(address token) external {
+    function sweepReward(address token) external onlyOwner {
         if (token == address(USDC) || token == address(COMET)) revert CannotRescueBaseAsset();
         address treasury = IVaultTreasury(vault).treasury();
         if (treasury == address(0)) revert InvalidAddress();

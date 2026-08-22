@@ -137,7 +137,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
       const paymentWin = Number(formData.paymentWindow) * 86400;
 
       if (engine === 'circle') {
-        createCircle(tree.root, addresses.length, amount, duration, paymentWin, true);
+        createCircle(tree.root, addresses.length, amount, duration, paymentWin);
       } else {
         const biddingWin = Number(formData.biddingWindow) * 86400;
         createAuction(tree.root, addresses.length, amount, duration, paymentWin, biddingWin);

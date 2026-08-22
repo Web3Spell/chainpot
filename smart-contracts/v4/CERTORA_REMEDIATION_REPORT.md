@@ -91,10 +91,16 @@ All remediations strictly adhere to Certora's recommended solutions and design d
 - **Fix**: Added `_liveAssets()` internal helper in `CompoundIntegratorV4.sol` reading `COMET.balanceOf(address(this))` directly. Updated `totalAssets()`, `convertToShares()`, and `convertToAssets()` to use `_liveAssets()`.
 
 #### `L-02`: Equal yield distribution incentivizes late payments and reduces treasury revenue
-- **Applied Solution (Option A — Individual Share Tracking)**:
-  - Added `memberShares` mapping to `CycleFunds` struct in [`VaultV4.sol`](file:///Users/rythme/developer/blockchain/chainpot/smart-contracts/v4/src/VaultV4.sol#L65-L205).
-  - Recorded exact virtual share amounts per member: `cf.memberShares[member] += shares`. Added getter `getMemberShares()`.
-  - Updated `_distribute()` in [`RoscaEngineBaseV4.sol`](file:///Users/rythme/developer/blockchain/chainpot/smart-contracts/v4/src/RoscaEngineBaseV4.sol#L725-L755) to allocate leftover yield pro-rata based on individual `memberShares`.
+- **Applied Solution (Exact Time-Weighted Member Yield Math)**:
+  - Added `memberShares`, `totalSharesMinted`, `harvestedAssets`, `netAssets`, and `netYield` to `CycleFunds` struct in [`VaultV4.sol`](file:///Users/rythme/developer/blockchain/chainpot/smart-contracts/v4/src/VaultV4.sol).
+  - Implemented exact per-member earned yield calculation in `_distribute()` in [`RoscaEngineBaseV4.sol`](file:///Users/rythme/developer/blockchain/chainpot/smart-contracts/v4/src/RoscaEngineBaseV4.sol):
+    $$\text{memberAssets} = \frac{\text{grossHarvested} \times \text{memberShares}}{\text{totalSharesMinted}}$$
+    $$\text{memberGrossYield} = \text{memberAssets} > \text{contrib} \,?\, (\text{memberAssets} - \text{contrib}) : 0$$
+    $$\text{memberNetYield} = \frac{\text{netYield} \times \text{memberGrossYield}}{\text{totalGrossYield}}$$
+  - For **Circle dividends**: only the net Compound yield (after 20% treasury fee) is split according to `memberGrossYield`.
+  - For **Auction discounts**: the auction discount ($\text{totalCollected} - \text{winnerCredit}$) is distributed equally across non-winning eligible recipients, while the net Compound yield is split according to `memberGrossYield`.
+  - For **Early completion refunds**: returns each member's exact `memberContribution` plus their accrued `memberNetYield`.
+  - Verified via `test_L02_timeWeightedYieldDistribution` proving early contributors receive proportionately higher yield.
 
 #### `L-03`: Ineffective rounding handling upon withdrawing from Comet
 - **Fix**: Capped withdrawal assets at live Comet float `COMET.balanceOf(address(this))` prior to `COMET.withdraw()` in `CompoundIntegratorV4.sol` and removed ineffective post-withdrawal check.
@@ -117,8 +123,9 @@ All remediations strictly adhere to Certora's recommended solutions and design d
 #### `L-08`: Comet rounding loss is socialized onto final cycle
 - **Fix**: Removed `internalPrincipal` floor in `accrue()` in `CompoundIntegratorV4.sol`, setting `realizedAssets` directly to live Comet balance.
 
-#### `L-09`: `internalPrincipal` does not match principal of remaining cycles
-- **Fix**: Capped proportional `principalShare` deduction at `internalPrincipal` inside `withdraw()` in `CompoundIntegratorV4.sol`.
+#### `L-09`: Redundant & inaccurate `internalPrincipal` accounting removed
+- **Fix**: Fully removed `internalPrincipal` state variable and its operations from `CompoundIntegratorV4.sol`. As L-08 removed it from share pricing and withdrawal calculations, removing `internalPrincipal` prevents any inaccurate state or tracking divergence across cycles deposited at different share prices.
+- **Verification**: `test_F11_internalPrincipalProportionalOnWithdraw` verifies that partial withdrawals withdraw exactly pro-rata Comet shares and preserve remaining assets.
 
 #### `L-10`: Reopened stuck-shuffle pots permanently trap join slots
 - **Fix**: Reset `p.rootFrozen = false;` when `cancelStuckShuffle()` reopens a pot in `RoscaEngineBaseV4.sol`.
@@ -131,7 +138,7 @@ All remediations strictly adhere to Certora's recommended solutions and design d
 - **`I-02`**: Reserved zero-index `PotStatus.None = 0` in `RoscaEngineBaseV4.sol`:
   `enum PotStatus { None, Open, Active, Completed }`.
 - **`I-03`**: Enforced upward fee rounding `Math.Rounding.Ceil` in `VaultV4.sol` `harvestCycle()`.
-- **`I-04`**: Updated `claimComp()` to query `IVaultTreasury(vault).treasury()` and use `cometRewards.claimTo(...)`. Added `sweepReward(address token)`.
+- **`I-04`**: Restricted `sweepReward(address token)` in `CompoundIntegratorV4.sol` to `onlyOwner`, preventing arbitrary third parties from sweeping non-base reward tokens.
 - **`I-05`**: Reverted unchanged Merkle root updates in `RoscaEngineBaseV4.sol` `updateMerkleRoot()`:
   `if (newRoot == bytes32(0) || newRoot == p.merkleRoot) revert InvalidParams();`.
 - **`I-06`**: Added `MIN_BIDDING_PHASE = 1 hours` constant and enforced `biddingWindow >= paymentWindow + MIN_BIDDING_PHASE` in `_initPot()`.
@@ -153,62 +160,82 @@ All remediations strictly adhere to Certora's recommended solutions and design d
 ## Verification & Testing Overview
 
 ### Automated Unit Test Suite (`forge test`)
-All 42 unit test cases pass with zero failures:
+All 47 unit test cases pass with zero failures and zero warnings:
 
 ```text
 Ran 2 tests for test/ForkComet.t.sol:ForkCometTest
 [PASS] test_fork_supplyAccrueWithdraw() (gas: 2504)
 [PASS] test_fork_twoDepositorsProRata() (gas: 2424)
-Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 285.46µs
+Suite result: ok. 2 passed; 0 failed; 0 skipped; finished in 302.42µs
 
-Ran 40 tests for test/ChainPotV4.t.sol:ChainPotV4Test
-[PASS] test_C01_F05_defaultSlashesAndExcludes_blacklistOnlyOnRepeat() (gas: 2793849)
-[PASS] test_C01_inviteGate_blocksUninvited() (gas: 234112)
-[PASS] test_C01_invitedMemberCanJoin() (gas: 339355)
-[PASS] test_C02_singleEligibleAssignsDirectNoVRF() (gas: 1568082)
-[PASS] test_C02_twoEligibleUsesVRF() (gas: 1796792)
-[PASS] test_F01_largeCircle_perCycleVRF_survives500kCallback() (gas: 50064484)
-[PASS] test_F01_wordStored_thenPermissionlessFinalize() (gas: 1836810)
-[PASS] test_F03_engineAdditionsTimelockedAfterLock() (gas: 56026)
-[PASS] test_F03_integratorVaultBindingIsOneTime() (gas: 13522)
-[PASS] test_F04_pauseExtendsPaymentDeadline() (gas: 1815860)
-[PASS] test_F05_minPaymentWindowEnforced() (gas: 27018)
-[PASS] test_F06_emptyRecipients_residualRoutedToTreasury() (gas: 1345667)
-[PASS] test_F07_releaseSlotAfterCompletion() (gas: 1179413)
-[PASS] test_F08_cycleCadenceEnforced() (gas: 2115148)
-[PASS] test_F09_retriesExhausted_fallbackWinner_notPotDeath() (gas: 1914294)
-[PASS] test_F10_bidDuringPaymentWindowReverts() (gas: 1280184)
-[PASS] test_F11_internalPrincipalProportionalOnWithdraw() (gas: 1420162)
-[PASS] test_H01_winnerCannotBidAgain() (gas: 2835151)
-[PASS] test_H03_overBidReverts() (gas: 1789312)
-[PASS] test_H04_blacklistedRecipientDoesNotBrick() (gas: 2260325)
-[PASS] test_H05_roundTripPreservesValue() (gas: 1300223)
-[PASS] test_H05_zeroSharesReverts() (gas: 1389330)
-[PASS] test_M01_lowestBidderCannotRaise() (gas: 1897175)
-[PASS] test_M02_repeatBid_noRep() (gas: 1981047)
-[PASS] test_M03_minStepEnforced() (gas: 1969217)
-[PASS] test_M05_createRejectsBadMemberCount() (gas: 26714)
-[PASS] test_M05_startRevertsIfRosterIncomplete() (gas: 340761)
-[PASS] test_M06_payAfterDeadlineReverts() (gas: 818674)
-[PASS] test_NEW2_leavePotRevertsWhenPaused() (gas: 328504)
-[PASS] test_NEW3_vrfTimeout_retryBeforeFallback() (gas: 1896847)
-[PASS] test_audit_H01_startPotNoUnfundedVRF() (gas: 714071)
-[PASS] test_audit_I01_getCurrentSupplyAPR1e18() (gas: 14322)
-[PASS] test_audit_I02_uninitializedPotStatusIsNone() (gas: 25557)
-[PASS] test_audit_I05_updateMerkleRootRevertsUnchanged() (gas: 225453)
-[PASS] test_audit_I06_minBiddingPhaseEnforced() (gas: 805211)
-[PASS] test_audit_L04_rescueTokensBlocksComet() (gas: 14019)
-[PASS] test_blacklistGatesJoin_butAllowsClaim() (gas: 2008012)
-[PASS] test_circle_fullPot_eachWinsOnce_conservation() (gas: 4892710)
-[PASS] test_payForCycleWithPermit_gracefulWithoutPermitSupport() (gas: 1240171)
-[PASS] test_rosterFrozenAfterStart() (gas: 708693)
-Suite result: ok. 40 passed; 0 failed; 0 skipped; finished in 11.70ms
+Ran 45 tests for test/ChainPotV4.t.sol:ChainPotV4Test
+[PASS] test_C01_F05_defaultSlashesAndExcludes_blacklistOnlyOnRepeat() (gas: 2808993)
+[PASS] test_C01_inviteGate_blocksUninvited() (gas: 231351)
+[PASS] test_C01_invitedMemberCanJoin() (gas: 336550)
+[PASS] test_C02_singleEligibleAssignsDirectNoVRF() (gas: 1611979)
+[PASS] test_C02_twoEligibleUsesVRF() (gas: 1838139)
+[PASS] test_F01_largeCircle_perCycleVRF_survives500kCallback() (gas: 50379299)
+[PASS] test_F01_wordStored_thenPermissionlessFinalize() (gas: 1874750)
+[PASS] test_F03_engineAdditionsTimelockedAfterLock() (gas: 56343)
+[PASS] test_F03_integratorVaultBindingIsOneTime() (gas: 13610)
+[PASS] test_F04_pauseExtendsPaymentDeadline() (gas: 1812260)
+[PASS] test_F05_minPaymentWindowEnforced() (gas: 26611)
+[PASS] test_F06_emptyRecipients_residualRoutedToTreasury() (gas: 1432972)
+[PASS] test_F07_releaseSlotAfterCompletion() (gas: 1163937)
+[PASS] test_F08_cycleCadenceEnforced() (gas: 2176106)
+[PASS] test_F09_retriesExhausted_fallbackWinner_notPotDeath() (gas: 1957207)
+[PASS] test_F10_bidDuringPaymentWindowReverts() (gas: 1279907)
+[PASS] test_F11_internalPrincipalProportionalOnWithdraw() (gas: 1380727)
+[PASS] test_H01_winnerCannotBidAgain() (gas: 2913916)
+[PASS] test_H03_overBidReverts() (gas: 1789216)
+[PASS] test_H04_blacklistedRecipientDoesNotBrick() (gas: 2355307)
+[PASS] test_H05_roundTripPreservesValue() (gas: 1278537)
+[PASS] test_H05_zeroSharesReverts() (gas: 1348204)
+[PASS] test_I04_sweepReward_onlyOwner() (gas: 1695740)
+[PASS] test_L02_auctionDiscount_with_zeroYield() (gas: 2191990)
+[PASS] test_L02_timeWeightedYieldDistribution() (gas: 2275675)
+[PASS] test_L02_zeroYield_noRevert_and_exactConservation() (gas: 2070995)
+[PASS] test_L02_zeroYield_refund_noRevert() (gas: 2641581)
+[PASS] test_M01_lowestBidderCannotRaise() (gas: 1897035)
+[PASS] test_M02_repeatBid_noRep() (gas: 1980907)
+[PASS] test_M03_minStepEnforced() (gas: 1968923)
+[PASS] test_M05_createRejectsBadMemberCount() (gas: 26285)
+[PASS] test_M05_startRevertsIfRosterIncomplete() (gas: 337846)
+[PASS] test_M06_payAfterDeadlineReverts() (gas: 815379)
+[PASS] test_NEW2_leavePotRevertsWhenPaused() (gas: 325890)
+[PASS] test_NEW3_vrfTimeout_retryBeforeFallback() (gas: 1937665)
+[PASS] test_audit_H01_startPotNoUnfundedVRF() (gas: 710886)
+[PASS] test_audit_I01_getCurrentSupplyAPR1e18() (gas: 14410)
+[PASS] test_audit_I02_uninitializedPotStatusIsNone() (gas: 25535)
+[PASS] test_audit_I05_updateMerkleRootRevertsUnchanged() (gas: 222650)
+[PASS] test_audit_I06_minBiddingPhaseEnforced() (gas: 805255)
+[PASS] test_audit_L04_rescueTokensBlocksComet() (gas: 14107)
+[PASS] test_blacklistGatesJoin_butAllowsClaim() (gas: 2069476)
+[PASS] test_circle_fullPot_eachWinsOnce_conservation() (gas: 5167535)
+[PASS] test_payForCycleWithPermit_gracefulWithoutPermitSupport() (gas: 1236863)
+[PASS] test_rosterFrozenAfterStart() (gas: 705288)
+Suite result: ok. 45 passed; 0 failed; 0 skipped; finished in 10.73ms
 
-Ran 2 test suites in 12.18ms: 42 tests passed, 0 failed, 0 skipped (42 total tests)
+Ran 2 test suites: 47 tests passed, 0 failed, 0 skipped (47 total tests)
 ```
+
+---
+
+## Live Base Sepolia Deployment Details
+
+| Contract | Deployed Address on Base Sepolia (`chainId 84532`) |
+| :--- | :--- |
+| **`MemberRegistryV4`** | `0x3cC0610EA70bB361Df99C9d9E157250Fd4F3779C` |
+| **`VRFProviderV4`** | `0x2976c1F054550886c4E2E958627525bE8C8aE2DB` |
+| **`CompoundIntegratorV4`** | `0x494fFA9805518a3C54b4D55d9fE447A513f975fD` |
+| **`VaultV4`** | `0xc02f071236ce39e25659689093011ae95E5C09D1` |
+| **`CircleEngineV4`** | `0xE1D5a24AeB77FEe5C41aeFfEB6C70022599c6c74` |
+| **`AuctionEngineV4`** | `0x477dE58BC89C98349447Fd4cf6c814dB355c75c3` |
+| **`USDC`** | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
+| **`Comet cUSDCv3`** | `0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017` |
 
 ---
 
 ## Conclusion
 
-ChainPot V4 has successfully addressed **100% of Certora's security findings and design recommendations**. The codebase is fully verified, tested, and deployed to **Base Sepolia**. We welcome the Certora team's final review and sign-off on this remediation report.
+ChainPot V4 has successfully addressed **100% of Certora's security findings, design recommendations, and fix review comments**. The codebase is fully verified, tested (47/47 passing tests), and deployed to **Base Sepolia**. We welcome the Certora team's final review and sign-off on this remediation report.

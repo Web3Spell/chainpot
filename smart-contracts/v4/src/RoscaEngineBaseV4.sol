@@ -6,6 +6,7 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 import {MerkleProof} from "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import {IERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {MemberRegistryV4} from "./MemberRegistryV4.sol";
 import {VaultV4} from "./VaultV4.sol";
 import {VRFProviderV4, IRandomnessReceiver} from "./VRFProviderV4.sol";
@@ -108,7 +109,6 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
     struct PendingDraw {
         uint256 potId;
         uint256 cycleId;
-        bool isShuffle;
         bool exists;
         bool ready; // (F-01) random word delivered, awaiting finalizeDraw
         uint256 word; // (F-01) the delivered random word
@@ -127,11 +127,6 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
     mapping(uint256 => mapping(address => bool)) public slotReleased; // (F-07)
     mapping(uint256 => PendingDraw) internal _pendingDraws; // vrf requestId => draw
     mapping(uint256 => uint64) public rootVersion; // (F-12) increments on every root update
-
-    // ---- Shuffle bookkeeping (F-02; used by shuffle-mode engines) ----
-    mapping(uint256 => uint256) public shuffleRequestId; // potId => pending VRF request (0 = none)
-    mapping(uint256 => uint256) public shuffleRequestedAt;
-    mapping(uint256 => uint256) public shuffleRetryCount;
 
     // ---- Pause-aware time (F-04) ----
     uint256 public cumulativePauseDuration;
@@ -176,7 +171,6 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
     event Joined(uint256 indexed potId, address indexed member);
     event Left(uint256 indexed potId, address indexed member);
     event PotStarted(uint256 indexed potId);
-    event PotReopened(uint256 indexed potId); // (F-02) shuffle unrecoverable -> members may leave
     event CycleStarted(uint256 indexed potId, uint256 indexed cycleId, uint256 startTime);
     event Paid(uint256 indexed potId, uint256 indexed cycleId, address indexed member, uint256 amount);
     event CycleSettled(uint256 indexed potId, uint256 indexed cycleId, uint256 totalCollected, uint256 paidCount);
@@ -503,20 +497,11 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         Cycle storage c = _cycles[potId][idx];
         uint256 reqId = lottery.requestRandomness();
         _pendingDraws[reqId] =
-            PendingDraw({potId: potId, cycleId: idx, isShuffle: false, exists: true, ready: false, word: 0});
+            PendingDraw({potId: potId, cycleId: idx, exists: true, ready: false, word: 0});
         c.status = CycleStatus.AwaitingVRF;
         c.vrfRequestId = reqId;
         c.vrfRequestedAt = block.timestamp;
         emit VRFRequested(potId, idx, reqId);
-    }
-
-    function _requestShuffle(uint256 potId) internal {
-        uint256 reqId = lottery.requestRandomness();
-        _pendingDraws[reqId] =
-            PendingDraw({potId: potId, cycleId: 0, isShuffle: true, exists: true, ready: false, word: 0});
-        shuffleRequestId[potId] = reqId; // F-02
-        shuffleRequestedAt[potId] = block.timestamp;
-        emit VRFRequested(potId, 0, reqId);
     }
 
     /// @notice Pick a winner with the §4.4 economic gate: 0 eligible -> early complete; 1 -> direct
@@ -544,21 +529,9 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         emit RandomnessReady(pd.potId, pd.cycleId, requestId);
     }
 
-    /// @notice (F-01) Permissionless settlement of a delivered random word — shuffle seed or cycle
-    ///         draw — in an ordinary transaction with a full block gas budget.
+    /// @notice (F-01) Permissionless settlement of a delivered random word for cycle draw
+    ///         in an ordinary transaction with a full block gas budget.
     function finalizeDraw(uint256 potId) external whenNotPaused {
-        // Shuffle first: it only ever exists before cycles run.
-        uint256 sReq = shuffleRequestId[potId];
-        if (sReq != 0 && _pendingDraws[sReq].exists) {
-            PendingDraw storage sd = _pendingDraws[sReq];
-            if (!sd.ready) revert RandomnessNotReady();
-            uint256 seed = sd.word;
-            delete _pendingDraws[sReq];
-            shuffleRequestId[potId] = 0;
-            _onShuffleSeed(potId, seed);
-            return;
-        }
-
         uint256 idx = _pots[potId].currentCycle;
         Cycle storage c = _cycles[potId][idx];
         if (c.status != CycleStatus.AwaitingVRF) revert NotAwaitingVRF();
@@ -630,33 +603,6 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         }
     }
 
-    /// @notice (F-02) Recover a pot whose SHUFFLE request never fulfilled. Retries first; once
-    ///         retries are exhausted the pot reopens so members can leave (no funds are at risk —
-    ///         payments only begin after the first cycle starts). The Merkle root stays frozen, so
-    ///         the pot remains invite-only to the original roster.
-    function cancelStuckShuffle(uint256 potId) external whenNotPaused {
-        Pot storage p = _pots[potId];
-        uint256 reqId = shuffleRequestId[potId];
-        if (p.status != PotStatus.Active || reqId == 0) revert NotAwaitingVRF();
-        PendingDraw storage pd = _pendingDraws[reqId];
-        if (!pd.exists) revert UnknownRequest();
-        if (pd.ready) revert RandomnessPendingConsumption(); // call finalizeDraw instead
-        if (block.timestamp < shuffleRequestedAt[potId] + VRF_TIMEOUT) revert TimeoutNotReached();
-
-        delete _pendingDraws[reqId];
-
-        if (shuffleRetryCount[potId] < MAX_VRF_RETRIES) {
-            shuffleRetryCount[potId] += 1;
-            _requestShuffle(potId);
-        } else {
-            shuffleRequestId[potId] = 0;
-            shuffleRetryCount[potId] = 0;
-            p.status = PotStatus.Open;
-            p.rootFrozen = false; // L-10: unfreeze root on shuffle reopen
-            emit PotReopened(potId);
-        }
-    }
-
     /// @dev M-01: Returns true if any member in the pot can still win (has not won and is not defaulted).
     function _hasWinnableMember(uint256 potId) internal view returns (bool) {
         address[] storage members = _pots[potId].members;
@@ -698,24 +644,24 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         if (c.status == CycleStatus.Completed) revert CycleNotActive();
 
         uint256 assets = vault.harvestCycle(potId, idx);
-        uint256 leftover = assets;
 
         if (winner != address(0)) {
             if (hasWonInPot[potId][winner]) revert AlreadyWonThisPot(); // H-01/H-02 belt
             uint256 wc = winnerCredit > assets ? assets : winnerCredit; // H-03 cap
             if (wc > 0) {
                 vault.creditWithdrawable(winner, wc, potId, idx, CREDIT_WIN);
-                leftover = assets - wc;
             }
             _recordWinner(potId, idx, winner);
             emit WinnerSelected(potId, idx, winner, wc);
         }
 
+        uint256 leftover = vault.backing();
+
         // (F-06) Every harvested wei must end up claimable by someone: recipients first, else the
         // winner, else the protocol treasury. Nothing can strand in `backing`.
         if (leftover > 0) {
             if (recipients.length > 0) {
-                _distribute(potId, idx, leftover, recipients, leftoverKind);
+                _distribute(potId, idx, recipients, leftoverKind);
             } else if (winner != address(0)) {
                 vault.creditWithdrawable(winner, leftover, potId, idx, CREDIT_RESIDUAL);
             } else {
@@ -736,38 +682,70 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         }
     }
 
-    /// @dev L-02 Option A: Distribute harvested leftover pro-rata based on individual Compound shares
-    function _distribute(uint256 potId, uint256 idx, uint256 amount, address[] memory recipients, uint8 kind)
-        internal
-    {
+    /// @dev L-02: Precise yield distribution based on memberYield = memberAssets - memberContribution
+    function _distribute(
+        uint256 potId,
+        uint256 idx,
+        address[] memory recipients,
+        uint8 kind
+    ) internal {
         uint256 n = recipients.length;
-        if (amount == 0 || n == 0) return;
+        uint256 totalAvailable = vault.backing();
+        if (n == 0 || totalAvailable == 0) return;
 
-        uint256 totalShares;
-        uint256[] memory shares = new uint256[](n);
+        (, uint256 totalSharesMinted, uint256 grossHarvested,, uint256 netYield) =
+            vault.getCycleYieldInfo(address(this), potId, idx);
+
+        uint256 totalGrossYield;
+        uint256[] memory memberGrossYields = new uint256[](n);
+        uint256[] memory memberContribs = new uint256[](n);
+
         for (uint256 i = 0; i < n; i++) {
-            shares[i] = vault.getMemberShares(address(this), potId, idx, recipients[i]);
-            totalShares += shares[i];
-        }
-
-        if (totalShares == 0) {
-            uint256 share = amount / n;
-            uint256 rem = amount - (share * n);
-            for (uint256 i = 0; i < n; i++) {
-                uint256 amt = share + (i == 0 ? rem : 0);
-                if (amt > 0) vault.creditWithdrawable(recipients[i], amt, potId, idx, kind);
+            address m = recipients[i];
+            uint256 contrib = vault.getMemberContribution(address(this), potId, idx, m);
+            memberContribs[i] = contrib;
+            uint256 mShares = vault.getMemberShares(address(this), potId, idx, m);
+            uint256 mAssets = totalSharesMinted > 0 ? Math.mulDiv(grossHarvested, mShares, totalSharesMinted) : 0;
+            if (mAssets > contrib) {
+                uint256 gy = mAssets - contrib;
+                memberGrossYields[i] = gy;
+                totalGrossYield += gy;
             }
-            return;
         }
 
-        uint256 distributed;
-        for (uint256 i = 0; i < n; i++) {
-            uint256 amt = (amount * shares[i]) / totalShares;
-            distributed += amt;
-            if (amt > 0) vault.creditWithdrawable(recipients[i], amt, potId, idx, kind);
+        uint256 totalDistributed;
+
+        if (kind == CREDIT_REFUND) {
+            // Refund: return each member's memberContribution + their earned share of net Compound yield
+            for (uint256 i = 0; i < n; i++) {
+                uint256 yieldShare = totalGrossYield > 0
+                    ? Math.mulDiv(netYield, memberGrossYields[i], totalGrossYield)
+                    : 0;
+                uint256 payout = memberContribs[i] + yieldShare;
+                if (payout > 0) {
+                    vault.creditWithdrawable(recipients[i], payout, potId, idx, kind);
+                    totalDistributed += payout;
+                }
+            }
+        } else {
+            // Dividend (Circle yield or Auction discount + yield)
+            uint256 discount = totalAvailable > netYield ? totalAvailable - netYield : 0;
+            uint256 discountPerMember = n > 0 ? discount / n : 0;
+
+            for (uint256 i = 0; i < n; i++) {
+                uint256 yieldShare = totalGrossYield > 0
+                    ? Math.mulDiv(netYield, memberGrossYields[i], totalGrossYield)
+                    : 0;
+                uint256 payout = discountPerMember + yieldShare;
+                if (payout > 0) {
+                    vault.creditWithdrawable(recipients[i], payout, potId, idx, kind);
+                    totalDistributed += payout;
+                }
+            }
         }
-        uint256 leftoverRem = amount - distributed;
-        if (leftoverRem > 0 && n > 0) {
+
+        if (totalAvailable > totalDistributed && n > 0) {
+            uint256 leftoverRem = totalAvailable - totalDistributed;
             vault.creditWithdrawable(recipients[0], leftoverRem, potId, idx, kind);
         }
     }
@@ -782,12 +760,8 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
 
     function _onStartPot(uint256 potId) internal virtual {}
 
-    function _canStartCycle(uint256 potId) internal view virtual returns (bool) {
+    function _canStartCycle(uint256 /*potId*/) internal view virtual returns (bool) {
         return true;
-    }
-
-    function _onShuffleSeed(uint256 potId, uint256 seed) internal virtual {
-        revert UnknownRequest();
     }
 
     /// @notice The set that shares the cycle's leftover (interest, and for the auction, the discount).
@@ -883,8 +857,6 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
 
     /// @notice (F-01) True when a delivered random word is waiting for `finalizeDraw`.
     function drawReady(uint256 potId) external view returns (bool) {
-        uint256 sReq = shuffleRequestId[potId];
-        if (sReq != 0 && _pendingDraws[sReq].exists) return _pendingDraws[sReq].ready;
         uint256 idx = _pots[potId].currentCycle;
         Cycle storage c = _cycles[potId][idx];
         if (c.status != CycleStatus.AwaitingVRF) return false;
