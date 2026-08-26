@@ -9,12 +9,12 @@
 
 | Contract | Address |
 |---|---|
-| MemberRegistryV4 | `0xF2D5C4Aec34BcB8A5dddC8da1e3d4Ad648085e51` |
-| VRFProviderV4 | `0x845436951F8e7F2E2Dc7d1Da278734829F1c699b` |
-| CompoundIntegratorV4 | `0x7e33e246F8924AE3912D98d76047A91a4b6B75f6` |
-| VaultV4 | `0xDE6520a47cF911F574916323BDDE7E4aff27d72C` |
-| CircleEngineV4 (Program A) | `0x0DC85461a89391D4a14fb04079E80970f898868e` |
-| AuctionEngineV4 (Program B) | `0xCe0E27106528E13B074069D2dB6E5368EA74a7f9` |
+| MemberRegistryV4 | `0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395` |
+| VRFProviderV4 | `0x02C179C8ddD881Ae61C50D06440a849EFCBEf504` |
+| CompoundIntegratorV4 | `0xa530364AfcEFeB70938Ec2D1aDdc1f64410610B6` |
+| VaultV4 | `0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95` |
+| CircleEngineV4 (Program A) | `0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db` |
+| AuctionEngineV4 (Program B) | `0x347B063538219961a747192d0656c1b4e382Da2e` |
 
 ## External dependencies
 
@@ -62,10 +62,9 @@ two-depositor 3:1 pro-rata check within 1%. The tests no-op under a non-forked `
 
 ## Post-deploy required
 
-1. Add `VRFProviderV4` (`0x845436951F8e7F2E2Dc7d1Da278734829F1c699b`) as a consumer on the Chainlink
+1. Add `VRFProviderV4` (`0x02C179C8ddD881Ae61C50D06440a849EFCBEf504`) as a consumer on the Chainlink
    VRF subscription `95007054372...333346`.
-2. Fund the VRF subscription with LINK (needed for `CircleEngineV4.startPot` shuffle and the
-   `AuctionEngineV4` no-bid path).
+2. Fund the VRF subscription with LINK (needed for `CircleEngineV4` per-cycle draws and `AuctionEngineV4` fallback).
 3. (Optional) `CompoundIntegratorV4.setCometRewards(address)` once a Base Sepolia CometRewards is known.
 4. (Production) Transfer `owner()` of each contract to a 2/3 multisig + timelock.
 
@@ -75,7 +74,7 @@ two-depositor 3:1 pro-rata check within 1%. The tests no-op under a non-forked `
 |---|---|---|
 | C-01 | Merkle invite gate + payment-gated eligibility + default→slash/blacklist; no collateral (disclosed) | `test_C01_inviteGate_blocksUninvited`, `test_C01_nonPayerDefaultedAndBlacklisted` |
 | C-02 | VRF economic gate: 0→early, 1→direct, ≥2→VRF; `MIN_AMOUNT_PER_CYCLE` | `test_C02_singleEligibleAssignsDirectNoVRF`, `test_C02_twoEligibleUsesVRF` |
-| H-01 | `hasWonInPot` blocks re-bid / re-win | `test_H01_winnerCannotBidAgain` |
+| H-01 | Payment-gated per-cycle VRF draw; no unfunded startPot VRF | `test_audit_H01_startPotNoUnfundedVRF`, `test_H01_winnerCannotBidAgain` |
 | H-02 | `_eligibleMembers` excludes winners/defaulters; callback belt-assert | (eligibility path, conservation test) |
 | H-03 | bid ceiling = `cycle.totalCollected`; winner credit capped at harvested assets | `test_H03_overBidReverts` |
 | H-04 | pull payments; blacklisted recipient cannot brick finalization | `test_H04_blacklistedRecipientDoesNotBrick` |
@@ -84,11 +83,13 @@ two-depositor 3:1 pro-rata check within 1%. The tests no-op under a non-forked `
 | M-03 | `MIN_BID_STEP_BPS` (2%) | `test_M03_minStepEnforced` |
 | M-05 | fixed roster; `memberCount==cycleCount` | `test_M05_createRejectsBadMemberCount`, `test_M05_startRevertsIfRosterIncomplete` |
 | M-06 | payment deadline | `test_M06_payAfterDeadlineReverts` |
+| L-02 | Time-weighted yield distribution + zero-gross-yield equal-split fallback | `test_L02_timeWeightedYieldDistribution`, `test_L02_auction_netYield_with_zeroGrossYield_splitsEqually` |
 | L-03 | no emergency sweep; surplus-only timelocked rescue | (VaultV4 `rescueSurplus`) |
+| L-09 | Redundant & inaccurate `internalPrincipal` removed; pro-rata share withdrawals | `test_F11_internalPrincipalProportionalOnWithdraw` |
 | inv #11 | blacklist gates joins, never claims | `test_blacklistGatesJoin_butAllowsClaim` |
 | lifecycle | each member wins once; conservation; vault drains | `test_circle_fullPot_eachWinsOnce_conservation` |
 
-**Tests:** 41 / 41 passing (`cd smart-contracts/v4 && forge test`).
+**Tests:** 48 / 48 passing (`cd smart-contracts/v4 && forge test`).
 
 ## Re-deploy
 

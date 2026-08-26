@@ -1,77 +1,79 @@
 <div align="center">
   <img src="Frontend/public/images/logo-white.svg" width="200" alt="ChainPot Logo"/>
   <h1>ChainPot</h1>
+  <p><strong>Decentralized Rotating Savings and Credit Association (ROSCA) Protocol</strong></p>
 </div>
 
-> A trust-minimized, yield-bearing rotating savings protocol with two engines - community kitty parties and business ROSCAs - built for the people the financial system forgot.
-> [Read the User Persona & Vision](userpersona.md)
+> A trust-minimized, yield-bearing rotating savings protocol with two engines — community kitty parties and business ROSCAs — built for the 2 billion people underserved by traditional banking.
+> [Read the User Persona & Vision](userpersona.md) • [Certora Audit Remediation Report](smart-contracts/v4/CERTORA_REMEDIATION_REPORT.md)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Solidity 0.8.24](https://img.shields.io/badge/solidity-0.8.24-363636)](smart-contracts/v4/)
 [![Foundry](https://img.shields.io/badge/foundry-1.4-orange)](smart-contracts/v4/)
 [![Network: Base Sepolia](https://img.shields.io/badge/network-Base%20Sepolia-0052FF)](https://sepolia.basescan.org/)
-[![Tests: 41/41](https://img.shields.io/badge/tests-41%2F41%20passing-brightgreen)](smart-contracts/v4/test/)
-[![Audit: v4.1](https://img.shields.io/badge/audit-v4.1%20remediated-success)](smart-contracts/SECURITY_FIXES_V4_1.md)
+[![Tests: 48/48](https://img.shields.io/badge/tests-48%2F48%20passing-brightgreen)](smart-contracts/v4/test/)
+[![Audit: Certora Remediated](https://img.shields.io/badge/audit-Certora%20Remediated-success)](smart-contracts/v4/CERTORA_REMEDIATION_REPORT.md)
 
 ---
 
-## Why ChainPot exists
+## Why ChainPot Exists
 
-Two billion people on this planet save and borrow through **rotating savings and credit associations** - *chit funds* in India, *susus* in West Africa, *paluwagans* in the Philippines, *tandas* in Mexico, *kyes* in Korea. They're older than banks. They work because the people inside the circle know and trust each other.
+Two billion people globally save and access liquidity through **rotating savings and credit associations** — known locally as *chit funds* in India, *susus* in West Africa, *paluwagans* in the Philippines, *tandas* in Mexico, and *kyes* in Korea. These informal financial circles predate modern banking and thrive on interpersonal community trust.
 
-But trust at scale is hard. Organizers run away with the pot. Members default. Discount math is opaque. Idle deposits earn nothing. Lawsuits go nowhere because the agreements aren't enforceable.
+However, traditional ROSCAs face structural vulnerabilities:
+- **Default & Counterparty Risk:** Organizers or late-cycle members can default or abscond with pooled funds.
+- **Opaque Accounting:** Discount allocation and ledger balancing are manual and prone to fraud.
+- **Zero Capital Efficiency:** Idle cash deposited in physical pots earns no yield.
+- **Legal Non-Enforceability:** Informal agreements lack recourse in traditional legal systems.
 
-**ChainPot puts the chit fund inside a smart contract.** Contributions, bids, and payouts are pure code on Base. Idle pot funds earn Compound III yield while waiting their turn. A **ChainPot Safety Module** captures 20% of all yield into Protocol Owned Liquidity, building an insurance backstop that scales with TVL. Winner selection is either a **Chainlink VRF lottery** (community circles) or a **competitive discount auction** (business ROSCAs). No organizer can disappear. No accounting can hide.
+**ChainPot digitizes and secures the ROSCA model on Base:**
+1. **Automated & Non-Custodial:** Contributions, bidding, winner selection, and settlements are executed trustlessly via smart contracts.
+2. **DeFi Yield Accrual:** Idle cycle contributions automatically generate yield in **Compound III (cUSDCv3)**.
+3. **ChainPot Safety Module:** 20% of all accrued Compound interest is channeled into Protocol-Owned Liquidity (POL) to establish an on-chain insurance backstop.
+4. **Dual Winner Mechanics:** Verifiable **Chainlink VRF V2.5** lottery draws for social groups, and **competitive discount auctions** for business capital allocation.
+5. **Zero-Collateral Social Trust:** Invite-only Merkle tree access control coupled with on-chain reputation scoring and progressive blacklisting.
 
 ---
 
-## Two engines, one protocol
+## Protocol Architecture & Dual Engines
 
-ChainPot V4 ships with two distinct engines sitting on top of the same audited, battle-tested foundation:
-
-### 🎲 Program A - CircleEngineV4 (Community Kitty Parties)
-
-For social groups, families, friends, and trusted communities. Members contribute a flat USDC amount each cycle; the winner is selected by **Chainlink VRF verifiable randomness**. Fair, fun, and frictionless - nobody has to out-bid each other or do financial math.
-
-### 🏦 Program B - AuctionEngineV4 (Business ROSCAs)
-
-For businesses, SMEs, and professionals who use ROSCAs as a serious liquidity and credit tool. Members bid competitively in a **lowest-bid discount auction**. The lowest bidder takes the pot early at a discount; the remaining USDC (discount + Compound interest) is distributed as dividends to patient members. Acts as a decentralized credit market.
+ChainPot V4 features two specialized engines built upon a hardened, shared smart contract foundation:
 
 ```mermaid
 graph TB
-    subgraph Engines["User-facing engines"]
-        CE["CircleEngineV4<br/>(Program A - Lottery)"]
-        AE["AuctionEngineV4<br/>(Program B - Auction)"]
+    subgraph Engines["User-Facing Engines"]
+        CE["CircleEngineV4<br/>(Program A — Social Lottery)"]
+        AE["AuctionEngineV4<br/>(Program B — Business Auction)"]
     end
 
-    subgraph Core["Shared foundation"]
-        REB["RoscaEngineBaseV4<br/>lifecycle, invites, defaults"]
-        V["VaultV4<br/>custody, pull payments, treasury"]
-        CI["CompoundIntegratorV4<br/>ERC4626-style yield"]
+    subgraph Core["Shared Foundation"]
+        REB["RoscaEngineBaseV4<br/>Lifecycle, Merkle Gates, Yield Math"]
+        V["VaultV4<br/>Custody, Pull-Ledger, Treasury Capture"]
+        CI["CompoundIntegratorV4<br/>ERC-4626 Yield Wrapper over Comet"]
     end
 
-    subgraph Auxiliary["Auxiliary"]
-        MR["MemberRegistryV4<br/>identity, reputation, blacklist"]
-        LE["LotteryEngineV4<br/>VRF gateway + callback"]
+    subgraph Auxiliary["Auxiliary Modules"]
+        MR["MemberRegistryV4<br/>Identity, Reputation, Blacklist"]
+        VP["VRFProviderV4<br/>Chainlink VRF V2.5 Gateway"]
     end
 
-    subgraph External["External (Base)"]
+    subgraph External["Base & DeFi Protocols"]
         USDC[(USDC)]
-        COMET[(Compound III)]
+        COMET[(Compound III Comet)]
         VRF[(Chainlink VRF V2.5)]
     end
 
     CE --> REB
     AE --> REB
-    REB -->|deposit / settle| V
-    REB -->|reputation| MR
-    REB -->|random winner| LE
-    V -->|supply / withdraw| CI
-    CI -->|COMET.supply / withdraw| COMET
-    LE -->|requestRandomWords| VRF
-    VRF -.callback.-> LE
-    V -->|transfer| USDC
-    V -->|20% yield| Treasury["🛡️ ChainPot Treasury<br/>(Safety Module / POL)"]
+    REB -->|Deposit / Settle / Distribute| V
+    REB -->|Record Wins / Penalize Defaults| MR
+    REB -->|Request Verifiable Randomness| VP
+    V -->|Supply / Withdraw Assets| CI
+    CI -->|Supply / Withdraw cUSDCv3| COMET
+    VP -->|Request Random Words| VRF
+    VRF -.Callback.-> VP
+    V -->|Claims & Withdrawals| USDC
+    V -->|20% Accrued Interest| Treasury["🛡️ ChainPot Treasury<br/>(Safety Module / POL)"]
 
     style CE fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
     style AE fill:#e1f5ff,stroke:#0052FF,stroke-width:2px
@@ -79,310 +81,218 @@ graph TB
     style Treasury fill:#fce4ec,stroke:#c62828,stroke-width:2px
 ```
 
----
+### 🎲 Program A — CircleEngineV4 (Community Kitty Parties)
+- **Target Audience:** Social circles, families, communities, and casual savers.
+- **Mechanism:** Members contribute a fixed USDC amount per cycle. Winners are selected via **payment-gated per-cycle Chainlink VRF draws** (`H-01`).
+- **Incentive:** Every eligible member wins exactly once per pot. Dividends from Compound yield are distributed among participants.
 
-## How a cycle plays out
-
-### Program A - Circle (Lottery)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as Creator
-    actor M as Member
-    participant CE as CircleEngineV4
-    participant V as VaultV4
-    participant LE as LotteryEngineV4
-    participant VRF as Chainlink VRF V2.5
-
-    C->>CE: createPot(merkleRoot, members, amount, duration, window, true)
-    Note over CE: Invite-only via Merkle proof
-    M->>CE: joinPot(potId, proof[])
-    C->>CE: startPot(potId)
-    C->>CE: startCycle(potId)
-
-    loop For each member
-      M->>CE: payForCycle(potId)
-      CE->>V: depositForCycle(potId, cycle, member, amount)
-    end
-
-    Note over CE: Payment window closes
-    C->>CE: drawWinner(potId)
-    CE->>LE: requestRandomness(eligible[])
-    LE->>VRF: requestRandomWords()
-    VRF-->>LE: fulfillRandomWords(seed)
-    LE-->>CE: receiveRandomness(potId, cycle, winner)
-    CE->>V: creditWinner + distributeInterest
-    M->>V: claim()
-```
-
-### Program B - Auction (Discount Bid)
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor C as Creator
-    actor M as Members
-    participant AE as AuctionEngineV4
-    participant V as VaultV4
-
-    C->>AE: createPot(merkleRoot, members, amount, duration, payWindow, bidWindow)
-    M->>AE: joinPot(potId, proof[])
-    C->>AE: startPot(potId) → startCycle(potId)
-
-    loop For each member
-      M->>AE: payForCycle(potId)
-    end
-
-    Note over AE: Bidding window open
-    M->>AE: placeBid(potId, 1500000) - "I'll take $1.50 of the $2 pot"
-    Note over AE: Must beat lowest by ≥2% (MIN_BID_STEP_BPS)
-
-    Note over AE: Bidding window closes
-    C->>AE: declareWinner(potId)
-    AE->>V: creditWinner(1.5 USDC) + splitDiscount(0.5 USDC to others)
-    M->>V: claim()
-```
+### 🏦 Program B — AuctionEngineV4 (Business ROSCAs)
+- **Target Audience:** Small-and-medium enterprises (SMEs), merchants, and entrepreneurs seeking working capital.
+- **Mechanism:** Members place competitive discount bids in a reverse auction. The lowest bidder receives the pot early at their bid amount.
+- **Dividend Distribution:** The remaining pot balance (discount + net Compound yield) is distributed to patient non-winning members as a high-yield dividend.
 
 ---
 
-## Architecture
+## Detailed Contract Responsibilities
 
-Seven contracts, single responsibility each:
-
-| Contract | Job | Key V4 innovation |
-|---|---|---|
-| **RoscaEngineBaseV4** | Shared lifecycle: pot CRUD, cycle state machine, Merkle invite gate, payment tracking, default engine, VRF integration | Frozen roster, invite-only via Merkle proof, zero collateral with social trust, VRF timeout + retry logic |
-| **CircleEngineV4** | Program A: lottery-based winner selection | Chainlink VRF randomness, eligible-member filtering, shuffle seed for future ordering |
-| **AuctionEngineV4** | Program B: lowest-bid discount auction | 2% min bid step (M-03), strictly-lower re-bids (M-01), `totalCollected` ceiling (H-03), VRF fallback for no-bid cycles |
-| **VaultV4** | Custody, pull payments, treasury yield capture | 20% yield → Safety Module (POL), `withdrawable` ledger, `rescueSurplus` with timelock |
-| **CompoundIntegratorV4** | ERC4626-style shares vault over Comet | Per-cycle share accounting, virtual offset against inflation attacks (H-05) |
-| **MemberRegistryV4** | Identity, reputation scoring, blacklist | Self-registration, creator profiles, bid history tracking (M-02), permanent blacklist on default |
-| **LotteryEngineV4** | Chainlink VRF gateway | `authorizedRequesters` allowlist (C-03), max-participants cap, configurable callback gas |
+| Contract | Primary Role | Key Innovations & Security Protections |
+| :--- | :--- | :--- |
+| **`RoscaEngineBaseV4`** | Shared ROSCA lifecycle state machine | Merkle invite gate, frozen roster, time-weighted gross yield accounting, L-02 zero-gross-yield equal fallback, retry fallback winner protection (`F-09`), cycle cadence enforcement (`F-08`). |
+| **`CircleEngineV4`** | Program A: Social Lottery Engine | Payment-gated per-cycle VRF draws (`H-01`), 2-step store-then-finalize settlement (`F-01`), single-payer direct winner assignment without VRF overhead. |
+| **`AuctionEngineV4`** | Program B: Business ROSCA Engine | Strict 2% minimum bid step (`M-03`), strictly-lower re-bids (`M-01`), bidding blocked during payment window (`F-10`), `totalCollected` bid ceiling (`H-03`). |
+| **`VaultV4`** | Non-custodial treasury & pull payments | Time-weighted cycle funds tracking, 20% protocol safety fee routing, zero-stranded-backing invariant (`backing == 0`), timelocked engine authorization (`F-03`). |
+| **`CompoundIntegratorV4`** | Compound III (cUSDCv3) wrapper | Live asset float queries (`L-01`), virtual offset against inflation/donation attacks (`H-05`), full removal of inaccurate `internalPrincipal` (`L-09`), asset rescue guards (`L-04`), one-time vault binding (`F-03`). |
+| **`MemberRegistryV4`** | Identity, reputation & blacklist | Activity timestamp tracking (`L-07`), repeat-default blacklist enforcement (`F-05`), single-bid reputation anti-manipulation (`M-02`). |
+| **`VRFProviderV4`** | Chainlink VRF V2.5 Coordinator Gateway | Authorized requester allowlist (`C-03`), 2.5M subscription ID support, decoupled random word storage from execution. |
 
 ---
 
-## Security model - "ChainPot for Trusted Communities"
+## Mathematical Formulations & Yield Distribution
 
-V4 is deliberately designed as **zero-collateral, invite-only** - optimized for viral growth and social trust over heavy DeFi collateral requirements:
+### 1. Exact Time-Weighted Member Yield (`L-02`)
 
-| Layer | Mechanism |
-|---|---|
-| **Access control** | Merkle-root invite gate - only the creator's whitelist can join a pot |
-| **Default deterrence** | Reputation scoring + permanent blacklist across the entire protocol |
-| **Social enforcement** | Creator invites real people; defaults destroy real relationships |
-| **Protocol insurance** | ChainPot Safety Module captures 20% of all Compound yield into Protocol Owned Liquidity |
-| **Fund custody** | Pull-only `VaultV4` - no human signer can drain funds; engines can only credit, never transfer |
-| **Randomness** | Chainlink VRF V2.5 - off-chain, verifiable, manipulation-proof |
-| **Admin safety** | Pausable, ReentrancyGuard, owner-only config; production target is multisig + timelock |
-
----
-
-## V4 audit remediations
-
-V4 ships after two rounds of independent audit across 15 findings. Every finding is closed with tests:
-
-```mermaid
-pie title V4 findings closed (by severity)
-    "Critical" : 4
-    "High" : 5
-    "Medium" : 6
-    "Low / Info" : 5
-```
-
-Key fixes:
-- **C-01** - Merkle invite gate + frozen roster + default→slash/blacklist (zero collateral, social trust model)
-- **C-02** - VRF economic gate: 0 eligible→early complete, 1→direct assign, ≥2→VRF
-- **H-01/H-02** - `hasWonInPot` prevents re-winning; eligible filtering excludes winners and defaulters
-- **H-03** - Bid ceiling = `cycle.totalCollected` (actual deposits, not hopeful max)
-- **H-04** - Pull-only payments; blacklisted recipients cannot brick finalization
-- **H-05** - ERC4626 virtual offset against inflation/donation attacks
-- **M-01/M-03** - Strictly-lower bids with 2% minimum step; no bid manipulation
-- **M-06** - Hard payment deadline enforcement
-
-41 / 41 Foundry tests pass, including full lifecycle, large-roster (100-member) VRF regressions, and fork tests against real Compound III.
-
----
-
-## V4.1 security-review remediations
-
-After the V4 audit, an independent architecture & security review surfaced 14 further findings
-(F-01 … F-14) - mostly liveness-at-scale and incentive-calibration issues rather than fund theft.
-All are closed with tests; see [`smart-contracts/SECURITY_FIXES_V4_1.md`](smart-contracts/SECURITY_FIXES_V4_1.md) for the full matrix.
-
-Highlights:
-
-- **F-01 / F-02 - VRF gas ceiling (store-then-finalize).** The Chainlink callback previously ran
-  harvest + distribution inside its `callbackGasLimit` and bricked pots past ~10–15 members. The
-  callback now only *stores* the random word; a permissionless `finalizeDraw(potId)` settles in an
-  ordinary transaction. The circle shuffle stores just the seed (order computed on demand), and
-  `cancelStuckShuffle` recovers a never-fulfilled shuffle. **100-member pots are now regression-tested.**
-- **F-03 - custody hardening.** `CompoundIntegratorV4.setVault` is a one-time binding; Vault engine
-  authorization is timelocked after `lockEngineSetup()`. No single owner key can re-point custody.
-- **F-05 - proportionate defaults.** A single missed payment slashes reputation and excludes the
-  member *from that pot*; the permanent, protocol-wide blacklist now triggers only on repeat defaults
-  (≥ 2 distinct pots). The invite-only, zero-collateral model is unchanged.
-- **F-06 - no stranded funds.** Every harvested wei is claimable by someone (`backing == 0` after
-  every finalization, asserted as an invariant).
-- **F-08 - real cadence.** `cycleDuration` is enforced in `startCycle`, so cycles can't be compressed.
-
-> **New required step:** after any draw, a keeper (or anyone) must call `finalizeDraw(potId)` to
-> settle. `drawReady(potId)` signals when settlement is pending. Frontends should wire this in.
-
-> **Redeploy note:** the addresses in the table below point at the pre-V4.1 deployment. Redeploy with
-> `script/DeployV4.s.sol` and update `Frontend/config/hooksConf.ts` before using the new functions.
-
----
-
-## Live on Base Sepolia (Testnet-Proven)
-
-Both engines have been deployed and **stress-tested with live transactions** on Base Sepolia:
-
-| Contract | Address |
-|---|---|
-| MemberRegistryV4 | `0xF2D5C4Aec34BcB8A5dddC8da1e3d4Ad648085e51` |
-| VRFProviderV4 | `0x845436951F8e7F2E2Dc7d1Da278734829F1c699b` |
-| CompoundIntegratorV4 | `0x7e33e246F8924AE3912D98d76047A91a4b6B75f6` |
-| VaultV4 | `0xDE6520a47cF911F574916323BDDE7E4aff27d72C` |
-| CircleEngineV4 (Program A) | `0x0DC85461a89391D4a14fb04079E80970f898868e` |
-| AuctionEngineV4 (Program B) | `0xCe0E27106528E13B074069D2dB6E5368EA74a7f9` |
-
-External deps: USDC `0x036C…F7e`, Comet USDC `0x5716…f017`, Chainlink VRF V2.5 Coordinator `0x5C21…7BEE`.
-
-**Testnet verification completed:**
-- ✅ Full CircleEngineV4 lifecycle: create → join → fund → drawWinner → VRF callback
-- ✅ Full AuctionEngineV4 lifecycle: create → join → fund → placeBid → declareWinner → settlement
-- ✅ Merkle invite gate blocks unauthorized wallets
-- ✅ MemberRegistryV4 reputation scoring on registration
-- ✅ VaultV4 deposit and pull-payment flow
-- ✅ Chainlink VRF request successfully sent and fulfilled
-
----
-
-## Repository layout
+In any cycle with gross harvested assets `grossHarvested`, total minted shares `totalSharesMinted`, member shares `S_i`, and member contribution `C_i`:
 
 ```
-chainpot/
-├── README.md                  ← you are here
-├── userpersona.md             ← who we're building for, and how they use ChainPot
-├── audit_Report.md            ← security audit report
-├── findings.md                ← detailed findings breakdown
-├── Frontend/                  ← Next.js + wagmi + RainbowKit dApp
-│   ├── app/                   ← App Router pages
-│   ├── components/            ← UI components
-│   ├── config/hooksConf.ts    ← contract addresses + ABIs
-│   ├── hooks/                 ← wagmi hooks per contract
-│   └── providers/             ← wallet provider, theme provider
-└── smart-contracts/
-    ├── src/                   ← legacy v2 contracts (kept for reference)
-    ├── v3/                    ← v3 contracts (historical, audited)
-    ├── SECURITY_FIXES_V4_1.md ← V4.1 security-review remediations (F-01…F-14)
-    └── v4/                    ← ★ current production contracts
-        ├── DEPLOYMENT.md      ← deployment record + audit-fix matrix
-        ├── foundry.toml
-        ├── src/               ← 7 production contracts
-        │   ├── RoscaEngineBaseV4.sol    ← shared lifecycle
-        │   ├── CircleEngineV4.sol       ← Program A (lottery)
-        │   ├── AuctionEngineV4.sol      ← Program B (auction)
-        │   ├── VaultV4.sol              ← custody + treasury
-        │   ├── CompoundIntegratorV4.sol ← yield engine
-        │   ├── MemberRegistryV4.sol     ← identity + reputation
-        │   └── LotteryEngineV4.sol      ← VRF gateway
-        ├── test/              ← 18 tests, with mocks
-        ├── script/            ← deploy + testnet lifecycle scripts
-        └── lib/               ← OpenZeppelin v5 + Chainlink + forge-std
+memberAssets_i = (grossHarvested * S_i) / totalSharesMinted
+memberGrossYield_i = max(0, memberAssets_i - C_i)
+totalGrossYield = sum(memberGrossYield_i)
 ```
+
+### 2. Dividend & Fallback Math
+
+For net interest `netYield` (after 20% Treasury cut):
+
+- **Standard Case (`totalGrossYield > 0`):**
+  ```
+  memberNetYield_i = (netYield * memberGrossYield_i) / totalGrossYield
+  ```
+
+- **Zero-Gross-Yield Fallback Case (`totalGrossYield == 0 && n > 0`):**
+  If non-winning recipients in an Auction pot (or depositors in a Circle pot) have zero calculated gross yield:
+  ```
+  equalYieldShare = netYield / n
+  memberNetYield_i = equalYieldShare
+  dust = netYield - (n * equalYieldShare)
+  ```
+
+The base discount is distributed equally (`discount / n`), member yield is distributed equally (`netYield / n`), and only division rounding dust (<= n wei) is credited to `recipients[0]`.
 
 ---
 
-## Getting started
+## Comprehensive Security & Audit Remediation
 
-### Smart contracts
+ChainPot V4 has undergone extensive security reviews and formal remediation incorporating findings from Certora and internal audit teams.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                          48 / 48 TESTS PASSING (100%)                       │
+│  [PASS] High Severity Remediations (H-01 .. H-05)                           │
+│  [PASS] Medium Severity Remediations (M-01 .. M-06)                         │
+│  [PASS] Low Severity Remediations (L-01 .. L-10)                            │
+│  [PASS] Informational Fixes (I-01 .. I-06)                                  │
+│  [PASS] Architecture & Scaling Review (F-01 .. F-14)                        │
+│  [PASS] Base Mainnet Fork Integration Tests (ForkCometTest)                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Remediation Highlights:
+- **`H-01` (Unfunded VRF Drain):** Replaced initial pre-shuffle VRF with payment-gated per-cycle draws (`_drawGated()`). VRF is only requested when >= 2 members have funded the cycle.
+- **`L-02` (Auction Zero-Gross-Yield Fallback):** Equal fallback division ensures net yield is split fairly among non-winning members rather than collapsing into a single recipient.
+- **`L-09` (Redundant `internalPrincipal` Removed):** Removed inaccurate tracking state; partial withdrawals withdraw exact pro-rata Comet shares.
+- **`I-04` (Sweep Reward Authorization):** Restricted `sweepReward(address)` to `onlyOwner`.
+- **`F-01` (VRF Gas Ceiling):** Implemented 2-step store-then-finalize pattern. VRF callback stores random seed; permissionless `finalizeDraw()` completes settlement in an ordinary transaction (tested for 100-member pots).
+- **`F-03` (Custody Hardening):** `CompoundIntegratorV4.setVault()` is a one-time binding; `VaultV4.lockEngineSetup()` permanently locks immediate engine additions.
+- **`F-10` (Auction Bidding Lock):** Bidding is strictly blocked during the payment window and opens only after payment deadline expiration.
+
+---
+
+## Live on Base Sepolia (`chainId 84532`)
+
+The entire V4 stack is deployed, wired, and verified on **Base Sepolia**:
+
+| Contract Name | Deployed Address | Basescan Explorer |
+| :--- | :--- | :--- |
+| **`MemberRegistryV4`** | `0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395` | [View on Basescan](https://sepolia.basescan.org/address/0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395) |
+| **`VRFProviderV4`** | `0x02C179C8ddD881Ae61C50D06440a849EFCBEf504` | [View on Basescan](https://sepolia.basescan.org/address/0x02C179C8ddD881Ae61C50D06440a849EFCBEf504) |
+| **`CompoundIntegratorV4`** | `0xa530364AfcEFeB70938Ec2D1aDdc1f64410610B6` | [View on Basescan](https://sepolia.basescan.org/address/0xa530364AfcEFeB70938Ec2D1aDdc1f64410610B6) |
+| **`VaultV4`** | `0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95` | [View on Basescan](https://sepolia.basescan.org/address/0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95) |
+| **`CircleEngineV4`** | `0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db` | [View on Basescan](https://sepolia.basescan.org/address/0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db) |
+| **`AuctionEngineV4`** | `0x347B063538219961a747192d0656c1b4e382Da2e` | [View on Basescan](https://sepolia.basescan.org/address/0x347B063538219961a747192d0656c1b4e382Da2e) |
+| **`USDC`** | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | [View on Basescan](https://sepolia.basescan.org/address/0x036CbD53842c5426634e7929541eC2318f3dCF7e) |
+| **`Compound III cUSDCv3`**| `0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017` | [View on Basescan](https://sepolia.basescan.org/address/0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017) |
+
+### Live Testnet Verified Transactions:
+- **Circle Pot Program (Program A):**
+  - Pot Created: [`0xa68578bd...`](https://sepolia.basescan.org/tx/0xa68578bda93e6b045bf8a1d0083e45792ec74edaadfcff1d2df2171365cf78fe)
+  - Member 1 Join: [`0x1258ab56...`](https://sepolia.basescan.org/tx/0x1258ab56e2191311a0546e467346a8b893deefd85af816813edbc88e4da30622)
+  - Member 2 Join: [`0x77dab077...`](https://sepolia.basescan.org/tx/0x77dab077e4d011b0387c1459191bb9e60812d2a2fc711aa60e57c9ae94a1c39c)
+  - Pot Started: [`0x215c6510...`](https://sepolia.basescan.org/tx/0x215c6510b3b3a3d7d83f65f840310b91b1d3051a6f6f21410dbf34920f35f6d1)
+  - Cycle 1 Started: [`0xd8ddd5c6...`](https://sepolia.basescan.org/tx/0xd8ddd5c651b8113d4ac04e6d8d2b362f4d28fd2842f15be8217e0d4ce86dea9d)
+  - Member 1 Deposit: [`0xaaa57da5...`](https://sepolia.basescan.org/tx/0xaaa57da5575500c312e9fe4ced4d8d744e466fb6c32a57ca99ae2bce755e0b3b)
+  - Member 2 Deposit: [`0xc34ccc35...`](https://sepolia.basescan.org/tx/0xc34ccc35e0c09048fccf44fbe0bec75f458e6d233cd5ac338b6ad5ff900ad54d)
+- **Auction Pot Program (Program B):**
+  - Pot Created: [`0x513030b8...`](https://sepolia.basescan.org/tx/0x513030b832a985199875c078dc0db9327c39b9966febc75bae2d36265d9b8220)
+  - Member 1 Join: [`0x620fcb75...`](https://sepolia.basescan.org/tx/0x620fcb75d3ada234ef6da6ece365d5b396961e82736c4cb1e7096249709a78b2)
+  - Member 2 Join: [`0x7883f0ef...`](https://sepolia.basescan.org/tx/0x7883f0ef5258aae3df4fce4cb61ae329fca4775d8d4cd9fa903cbd50bb70f89f)
+  - Pot Started: [`0x9071bf7a...`](https://sepolia.basescan.org/tx/0x9071bf7ad2ad3436cc8eaa80e32e7fee5117ad39d36c003b0bc38cc4ec0df989)
+  - Cycle 1 Started: [`0xb3d48a1e...`](https://sepolia.basescan.org/tx/0xb3d48a1e97dc0c1fe24cdcd34dfce1a2d4fe371d5a8f4ef9463b41afe4b26d05)
+  - Member 1 Deposit: [`0x779519e4...`](https://sepolia.basescan.org/tx/0x779519e43d3ecd474453f5f3135358e9aa096b92a98afc6ffd58b61079679708)
+  - Member 2 Deposit: [`0xb400c8f3...`](https://sepolia.basescan.org/tx/0xb400c8f30b8d8b5d411ab075ec7fb88cc3416afe50fd676631a5b1a3bccd0417)
+  - F-10 Enforcement: Bidding during payment window rejected with `BiddingNotOpen`
+
+---
+
+## Getting Started
+
+### 1. Smart Contract Development & Testing
 
 ```bash
 cd smart-contracts/v4
+
+# Build contracts
 forge build
-forge test                                # 41 / 41 tests
-```
 
-Fork test against real Compound III on Base mainnet:
+# Run all 48 unit, regression, and remediation tests
+forge test
 
-```bash
+# Run fork test against live Base Mainnet Compound III
 forge test --match-contract ForkCometTest --fork-url https://mainnet.base.org -vv
 ```
 
-Deploying a fresh copy:
+### 2. Deploying to Base Sepolia
 
 ```bash
-cp /dev/null .env
-# Add to .env:
-#   PRIVATE_KEY=0x...
-#   USDC_BASE_SEPOLIA=0x036CbD53842c5426634e7929541eC2318f3dCF7e
-#   COMET_USDC_BASE_SEPOLIA=0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017
-#   VRF_COORDINATOR_BASE_SEPOLIA=0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE
-#   VRF_KEYHASH_BASE_SEPOLIA=0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71
-#   VRF_SUBSCRIPTION_ID=<your-sub-id>
+cd smart-contracts/v4
 
-set -a && source .env && set +a
-forge script script/DeployV4.s.sol:DeployV4 \
-  --rpc-url https://sepolia.base.org \
-  --broadcast --slow
+# Configure environment variables in .env
+# PRIVATE_KEY=0x...
+# USDC_BASE_SEPOLIA=0x036CbD53842c5426634e7929541eC2318f3dCF7e
+# COMET_USDC_BASE_SEPOLIA=0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017
+# VRF_COORDINATOR_BASE_SEPOLIA=0x5C210eF41CD1a72de73bF76eC39637bB0d3d7BEE
+# VRF_KEYHASH_BASE_SEPOLIA=0x9e1344a1247c8a1785d0a4681a27152bffdb43666ae5bf7d14d24a5efd44bf71
+# VRF_SUBSCRIPTION_ID=95007054372769189896522520864557247936870864063300209685082674604833762333346
+
+# Execute deployment script
+forge script script/DeployV4.s.sol --rpc-url https://base-sepolia-rpc.publicnode.com --broadcast --slow --legacy
 ```
 
-Then add the deployed `LotteryEngineV4` as a consumer on your Chainlink VRF subscription.
-
-### Frontend
+### 3. Frontend Application
 
 ```bash
 cd Frontend
+
+# Install dependencies
 npm install
-npm run dev                              # http://localhost:3000
-```
 
-The frontend hard-codes active contract addresses in `config/hooksConf.ts`. Repointing at the V4 deployment is a single-file edit.
+# Run local development server
+npm run dev
 
----
-
-## Status & roadmap
-
-```mermaid
-gantt
-    title ChainPot 2026 roadmap
-    dateFormat YYYY-MM-DD
-    section v3 - auditable
-    v3 contracts shipped         :done, 2026-04-01, 2026-05-13
-    Base Sepolia deployment      :done, 2026-05-13, 1d
-    Frontend integration         :done, 2026-05-13, 1d
-    section v4 - battle-hardened
-    Dual engine architecture     :done, 2026-06-15, 2026-07-02
-    Safety Module (POL)          :done, 2026-06-28, 2026-07-02
-    Audit remediation (15 fixes) :done, 2026-06-28, 2026-07-02
-    Testnet stress testing       :done, 2026-07-01, 2026-07-02
-    section v5 - mainnet
-    External firm audit          :2026-07-05, 30d
-    Multisig owner + timelock    :2026-07-05, 14d
-    Base mainnet deployment      :2026-08-01, 7d
-    Mobile-first PWA             :2026-08-01, 21d
-    Pilot circles (10 groups)    :2026-08-15, 30d
+# Production build
+npm run build
 ```
 
 ---
 
-## Contributing
+## Repository Structure
 
-Contributions are welcome. Please:
-
-1. Open an issue describing the change before sending a PR.
-2. Run `forge test` (must stay 41/41) and `npm run build` in `Frontend/` (must stay green).
-3. Keep `v4/` contracts stable - if you're changing core logic, document the change and update the audit report.
-
-See `LICENSE` for terms.
+```
+chainpot/
+├── README.md                           ← Project overview & documentation
+├── userpersona.md                      ← User personas, vision & product design
+├── Frontend/                           ← Next.js 16 (Turbopack) + Wagmi + RainbowKit dApp
+│   ├── app/                            ← App router pages & layouts
+│   ├── components/                     ← React components & UI design system
+│   ├── config/hooksConf.ts             ← ABIs & Base Sepolia contract addresses
+│   └── hooks/                          ← Custom React hooks for V4 contracts
+└── smart-contracts/
+    └── v4/                             ← Production V4 smart contracts
+        ├── CERTORA_REMEDIATION_REPORT.md← Formal audit remediation design doc
+        ├── DEPLOYMENT.md               ← Deployment addresses & verification log
+        ├── foundry.toml                ← Foundry configuration
+        ├── src/                        ← Core Solidity contracts
+        │   ├── RoscaEngineBaseV4.sol   ← Shared lifecycle & yield math
+        │   ├── CircleEngineV4.sol      ← Program A (Lottery engine)
+        │   ├── AuctionEngineV4.sol     ← Program B (Discount auction engine)
+        │   ├── VaultV4.sol             ← Custody, ledger & treasury fee capture
+        │   ├── CompoundIntegratorV4.sol← Yield vault over Compound III Comet
+        │   ├── MemberRegistryV4.sol    ← Identity, reputation & blacklisting
+        │   └── VRFProviderV4.sol       ← Chainlink VRF V2.5 Coordinator wrapper
+        ├── test/                       ← 48 automated test suites
+        └── script/                     ← Deployment & testnet execution scripts
+```
 
 ---
 
 ## Acknowledgements
 
-- The **Compound** team for Compound III - clean per-account accounting that makes integrations like this possible.
-- **Chainlink VRF V2.5** for the only verifiable-randomness primitive that holds up against on-chain adversaries.
-- **OpenZeppelin** for Pausable / ReentrancyGuard / SafeERC20 / MerkleProof - boring infrastructure, done right.
-- The people running real chit funds for the last two centuries, whose social engineering we're trying to encode without ruining.
+- **Compound Finance** for Compound III Comet — enabling clean, real-time supply yield integration.
+- **Chainlink** for VRF V2.5 — providing cryptographically verifiable on-chain randomness.
+- **OpenZeppelin** for battle-tested ERC-20, SafeERC20, ReentrancyGuard, and MerkleProof primitives.
+- **Base** for low-latency, scalable Ethereum L2 infrastructure.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
