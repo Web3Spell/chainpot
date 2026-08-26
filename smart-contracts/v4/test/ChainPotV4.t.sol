@@ -994,6 +994,38 @@ contract ChainPotV4Test is Test {
         assertEq(vault.backing(), 0, "no backing stranded");
     }
 
+    function test_L02_auction_netYield_with_zeroGrossYield_splitsEqually() public {
+        uint256 potId = _startedAuction();
+        // Alice bids 300e6 (discount is 100e6)
+        vm.prank(alice);
+        auction.placeBid(potId, 300e6);
+
+        // Simulate 30e6 net interest generated in Compound during the cycle
+        // Gross yield in Compound = 30e6 / 0.8 = 37.5e6 (since 20% goes to Treasury)
+        uint256 grossInterest = 37500000;
+        comet.simulateInterest(address(integrator), grossInterest);
+
+        vm.warp(block.timestamp + BID_WINDOW + 1);
+        auction.declareWinner(potId);
+
+        // Winner gets bid amount (300e6)
+        assertEq(vault.withdrawable(alice), 300e6, "winner gets bid amount only");
+
+        // Total available = 129,999,999 (100e6 discount + 29,999,999 net yield after treasury fee & Comet share pricing)
+        // Divided equally among 3 non-winners (Bob, Carol, Dave):
+        // Base share = 33,333,333 (discount) + 9,999,999 (yield) = 43,333,332 each
+        // Remainder dust = 3 wei credited to Bob (recipients[0])
+        uint256 bBal = vault.withdrawable(bob);
+        uint256 cBal = vault.withdrawable(carol);
+        uint256 dBal = vault.withdrawable(dave);
+
+        assertEq(bBal, 43333335, "bob gets equal share of discount + equal share of yield + 3 wei dust");
+        assertEq(cBal, 43333332, "carol gets equal share of discount + equal share of yield");
+        assertEq(dBal, 43333332, "dave gets equal share of discount + equal share of yield");
+        assertEq(bBal + cBal + dBal, 129999999, "total distributed matches discount + netYield exactly");
+        assertEq(vault.backing(), 0, "no backing stranded in vault");
+    }
+
     // ---------- M-02: repeat bids gain no reputation ----------
 
     function test_M02_repeatBid_noRep() public {

@@ -14,9 +14,9 @@ contract TestnetRun is Script {
         address user1 = vm.addr(pk1);
         address user2 = vm.addr(pk2);
 
-        CircleEngineV4 circle = CircleEngineV4(0xE1D5a24AeB77FEe5C41aeFfEB6C70022599c6c74);
-        MemberRegistryV4 registry = MemberRegistryV4(0x3cC0610EA70bB361Df99C9d9E157250Fd4F3779C);
-        VaultV4 vault = VaultV4(0xc02f071236ce39e25659689093011ae95E5C09D1);
+        CircleEngineV4 circle = CircleEngineV4(0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db);
+        MemberRegistryV4 registry = MemberRegistryV4(0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395);
+        VaultV4 vault = VaultV4(0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95);
         IERC20 usdc = IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
 
         vm.startBroadcast(pk1);

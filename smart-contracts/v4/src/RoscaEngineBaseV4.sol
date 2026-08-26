@@ -714,13 +714,14 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
         }
 
         uint256 totalDistributed;
+        uint256 equalYieldShare = (totalGrossYield == 0 && n > 0) ? netYield / n : 0;
 
         if (kind == CREDIT_REFUND) {
             // Refund: return each member's memberContribution + their earned share of net Compound yield
             for (uint256 i = 0; i < n; i++) {
                 uint256 yieldShare = totalGrossYield > 0
                     ? Math.mulDiv(netYield, memberGrossYields[i], totalGrossYield)
-                    : 0;
+                    : equalYieldShare;
                 uint256 payout = memberContribs[i] + yieldShare;
                 if (payout > 0) {
                     vault.creditWithdrawable(recipients[i], payout, potId, idx, kind);
@@ -735,7 +736,7 @@ abstract contract RoscaEngineBaseV4 is IRandomnessReceiver, Ownable, ReentrancyG
             for (uint256 i = 0; i < n; i++) {
                 uint256 yieldShare = totalGrossYield > 0
                     ? Math.mulDiv(netYield, memberGrossYields[i], totalGrossYield)
-                    : 0;
+                    : equalYieldShare;
                 uint256 payout = discountPerMember + yieldShare;
                 if (payout > 0) {
                     vault.creditWithdrawable(recipients[i], payout, potId, idx, kind);

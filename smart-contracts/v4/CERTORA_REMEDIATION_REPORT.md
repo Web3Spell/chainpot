@@ -91,16 +91,20 @@ All remediations strictly adhere to Certora's recommended solutions and design d
 - **Fix**: Added `_liveAssets()` internal helper in `CompoundIntegratorV4.sol` reading `COMET.balanceOf(address(this))` directly. Updated `totalAssets()`, `convertToShares()`, and `convertToAssets()` to use `_liveAssets()`.
 
 #### `L-02`: Equal yield distribution incentivizes late payments and reduces treasury revenue
-- **Applied Solution (Exact Time-Weighted Member Yield Math)**:
+- **Applied Solution (Exact Time-Weighted Member Yield Math & Equal-Split Fallback)**:
   - Added `memberShares`, `totalSharesMinted`, `harvestedAssets`, `netAssets`, and `netYield` to `CycleFunds` struct in [`VaultV4.sol`](file:///Users/rythme/developer/blockchain/chainpot/smart-contracts/v4/src/VaultV4.sol).
   - Implemented exact per-member earned yield calculation in `_distribute()` in [`RoscaEngineBaseV4.sol`](file:///Users/rythme/developer/blockchain/chainpot/smart-contracts/v4/src/RoscaEngineBaseV4.sol):
     $$\text{memberAssets} = \frac{\text{grossHarvested} \times \text{memberShares}}{\text{totalSharesMinted}}$$
     $$\text{memberGrossYield} = \text{memberAssets} > \text{contrib} \,?\, (\text{memberAssets} - \text{contrib}) : 0$$
-    $$\text{memberNetYield} = \frac{\text{netYield} \times \text{memberGrossYield}}{\text{totalGrossYield}}$$
-  - For **Circle dividends**: only the net Compound yield (after 20% treasury fee) is split according to `memberGrossYield`.
-  - For **Auction discounts**: the auction discount ($\text{totalCollected} - \text{winnerCredit}$) is distributed equally across non-winning eligible recipients, while the net Compound yield is split according to `memberGrossYield`.
+    $$\text{memberNetYield} = \text{totalGrossYield} > 0 \,?\, \frac{\text{netYield} \times \text{memberGrossYield}}{\text{totalGrossYield}} : \left(\frac{\text{netYield}}{n}\right)$$
+  - **Zero-Weight / Equal-Split Fallback**:
+    If $\text{totalGrossYield} == 0$ (e.g. non-winner recipients calculated gross yield is zero or dust, while $\text{netYield} > 0$):
+    $$\text{equalYieldShare} = (\text{totalGrossYield} == 0 \ \&\&\ n > 0) \ ?\ \frac{\text{netYield}}{n} : 0$$
+    Every non-winning recipient receives their equal share of $\text{netYield}$ ($\frac{\text{netYield}}{n}$), and only division rounding dust ($\le n$ wei) is credited to `recipients[0]`. This prevents the entire net yield from improperly collapsing into `recipients[0]` during auction dividends.
+  - For **Circle dividends**: the net Compound yield (after 20% treasury fee) is split according to `memberGrossYield` (or equally if $\text{totalGrossYield} == 0$).
+  - For **Auction discounts**: the auction discount ($\text{totalCollected} - \text{winnerCredit}$) is distributed equally across non-winning eligible recipients, while the net Compound yield is split according to `memberGrossYield` (or equally if $\text{totalGrossYield} == 0$).
   - For **Early completion refunds**: returns each member's exact `memberContribution` plus their accrued `memberNetYield`.
-  - Verified via `test_L02_timeWeightedYieldDistribution` proving early contributors receive proportionately higher yield.
+  - **Verification**: Verified via `test_L02_timeWeightedYieldDistribution` and `test_L02_auction_netYield_with_zeroGrossYield_splitsEqually`.
 
 #### `L-03`: Ineffective rounding handling upon withdrawing from Comet
 - **Fix**: Capped withdrawal assets at live Comet float `COMET.balanceOf(address(this))` prior to `COMET.withdraw()` in `CompoundIntegratorV4.sol` and removed ineffective post-withdrawal check.
@@ -193,30 +197,32 @@ Ran 45 tests for test/ChainPotV4.t.sol:ChainPotV4Test
 [PASS] test_H05_zeroSharesReverts() (gas: 1348204)
 [PASS] test_I04_sweepReward_onlyOwner() (gas: 1695740)
 [PASS] test_L02_auctionDiscount_with_zeroYield() (gas: 2191990)
-[PASS] test_L02_timeWeightedYieldDistribution() (gas: 2275675)
-[PASS] test_L02_zeroYield_noRevert_and_exactConservation() (gas: 2070995)
-[PASS] test_L02_zeroYield_refund_noRevert() (gas: 2641581)
-[PASS] test_M01_lowestBidderCannotRaise() (gas: 1897035)
-[PASS] test_M02_repeatBid_noRep() (gas: 1980907)
-[PASS] test_M03_minStepEnforced() (gas: 1968923)
-[PASS] test_M05_createRejectsBadMemberCount() (gas: 26285)
-[PASS] test_M05_startRevertsIfRosterIncomplete() (gas: 337846)
-[PASS] test_M06_payAfterDeadlineReverts() (gas: 815379)
-[PASS] test_NEW2_leavePotRevertsWhenPaused() (gas: 325890)
-[PASS] test_NEW3_vrfTimeout_retryBeforeFallback() (gas: 1937665)
-[PASS] test_audit_H01_startPotNoUnfundedVRF() (gas: 710886)
-[PASS] test_audit_I01_getCurrentSupplyAPR1e18() (gas: 14410)
-[PASS] test_audit_I02_uninitializedPotStatusIsNone() (gas: 25535)
-[PASS] test_audit_I05_updateMerkleRootRevertsUnchanged() (gas: 222650)
-[PASS] test_audit_I06_minBiddingPhaseEnforced() (gas: 805255)
-[PASS] test_audit_L04_rescueTokensBlocksComet() (gas: 14107)
-[PASS] test_blacklistGatesJoin_butAllowsClaim() (gas: 2069476)
-[PASS] test_circle_fullPot_eachWinsOnce_conservation() (gas: 5167535)
-[PASS] test_payForCycleWithPermit_gracefulWithoutPermitSupport() (gas: 1236863)
-[PASS] test_rosterFrozenAfterStart() (gas: 705288)
-Suite result: ok. 45 passed; 0 failed; 0 skipped; finished in 10.73ms
+[PASS] test_L02_timeWeightedYieldDistribution() (gas: 2276228)
+[PASS] test_L02_zeroYield_noRevert_and_exactConservation() (gas: 2071355)
+[PASS] test_L02_zeroYield_refund_noRevert() (gas: 2642169)
+[PASS] test_L02_auctionDiscount_with_zeroYield() (gas: 2192751)
+[PASS] test_L02_auction_netYield_with_zeroGrossYield_splitsEqually() (gas: 2328995)
+[PASS] test_M01_lowestBidderCannotRaise() (gas: 1897359)
+[PASS] test_M02_repeatBid_noRep() (gas: 1981303)
+[PASS] test_M03_minStepEnforced() (gas: 1969283)
+[PASS] test_M05_createRejectsBadMemberCount() (gas: 26321)
+[PASS] test_M05_startRevertsIfRosterIncomplete() (gas: 337930)
+[PASS] test_M06_payAfterDeadlineReverts() (gas: 815595)
+[PASS] test_NEW2_leavePotRevertsWhenPaused() (gas: 326015)
+[PASS] test_NEW3_vrfTimeout_retryBeforeFallback() (gas: 1938025)
+[PASS] test_audit_H01_startPotNoUnfundedVRF() (gas: 711066)
+[PASS] test_audit_I01_getCurrentSupplyAPR1e18() (gas: 14422)
+[PASS] test_audit_I02_uninitializedPotStatusIsNone() (gas: 25559)
+[PASS] test_audit_I05_updateMerkleRootRevertsUnchanged() (gas: 222722)
+[PASS] test_audit_I06_minBiddingPhaseEnforced() (gas: 806035)
+[PASS] test_audit_L04_rescueTokensBlocksComet() (gas: 14131)
+[PASS] test_blacklistGatesJoin_butAllowsClaim() (gas: 2069860)
+[PASS] test_circle_fullPot_eachWinsOnce_conservation() (gas: 5169951)
+[PASS] test_payForCycleWithPermit_gracefulWithoutPermitSupport() (gas: 1237055)
+[PASS] test_rosterFrozenAfterStart() (gas: 705468)
+Suite result: ok. 46 passed; 0 failed; 0 skipped; finished in 11.71ms
 
-Ran 2 test suites: 47 tests passed, 0 failed, 0 skipped (47 total tests)
+Ran 2 test suites: 48 tests passed, 0 failed, 0 skipped (48 total tests)
 ```
 
 ---
@@ -225,12 +231,12 @@ Ran 2 test suites: 47 tests passed, 0 failed, 0 skipped (47 total tests)
 
 | Contract | Deployed Address on Base Sepolia (`chainId 84532`) |
 | :--- | :--- |
-| **`MemberRegistryV4`** | `0x3cC0610EA70bB361Df99C9d9E157250Fd4F3779C` |
-| **`VRFProviderV4`** | `0x2976c1F054550886c4E2E958627525bE8C8aE2DB` |
-| **`CompoundIntegratorV4`** | `0x494fFA9805518a3C54b4D55d9fE447A513f975fD` |
-| **`VaultV4`** | `0xc02f071236ce39e25659689093011ae95E5C09D1` |
-| **`CircleEngineV4`** | `0xE1D5a24AeB77FEe5C41aeFfEB6C70022599c6c74` |
-| **`AuctionEngineV4`** | `0x477dE58BC89C98349447Fd4cf6c814dB355c75c3` |
+| **`MemberRegistryV4`** | `0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395` |
+| **`VRFProviderV4`** | `0x02C179C8ddD881Ae61C50D06440a849EFCBEf504` |
+| **`CompoundIntegratorV4`** | `0xa530364AfcEFeB70938Ec2D1aDdc1f64410610B6` |
+| **`VaultV4`** | `0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95` |
+| **`CircleEngineV4`** | `0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db` |
+| **`AuctionEngineV4`** | `0x347B063538219961a747192d0656c1b4e382Da2e` |
 | **`USDC`** | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` |
 | **`Comet cUSDCv3`** | `0x571621Ce60Cebb0c1D442B5afb38B1663C6Bf017` |
 

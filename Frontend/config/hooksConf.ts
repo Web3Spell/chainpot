@@ -1,13 +1,13 @@
 // V4.1 security fixes — ABIs regenerated from patched v4 contracts.
-// Addresses updated to the latest Base Sepolia deployment (2026-08-22).
+// Addresses updated to the latest Base Sepolia deployment (2026-08-26).
 
 export const CONTRACT_ADDRESSES = {
-  memberRegistry: "0x3cC0610EA70bB361Df99C9d9E157250Fd4F3779C",
-  circleEngine: "0xE1D5a24AeB77FEe5C41aeFfEB6C70022599c6c74",
-  auctionEngine: "0x477dE58BC89C98349447Fd4cf6c814dB355c75c3",
-  vault: "0xc02f071236ce39e25659689093011ae95E5C09D1",
-  lottery: "0x2976c1F054550886c4E2E958627525bE8C8aE2DB",
-  compoundIntegrator: "0x494fFA9805518a3C54b4D55d9fE447A513f975fD",
+  memberRegistry: "0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395",
+  circleEngine: "0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db",
+  auctionEngine: "0x347B063538219961a747192d0656c1b4e382Da2e",
+  vault: "0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95",
+  lottery: "0x02C179C8ddD881Ae61C50D06440a849EFCBEf504",
+  compoundIntegrator: "0xa530364AfcEFeB70938Ec2D1aDdc1f64410610B6",
   usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
 };
 

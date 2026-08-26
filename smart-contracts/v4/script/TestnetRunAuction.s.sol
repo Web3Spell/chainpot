@@ -14,9 +14,9 @@ contract TestnetRunAuction is Script {
         address user1 = vm.addr(pk1);
         address user2 = vm.addr(pk2);
 
-        AuctionEngineV4 auction = AuctionEngineV4(0x477dE58BC89C98349447Fd4cf6c814dB355c75c3);
-        MemberRegistryV4 registry = MemberRegistryV4(0x3cC0610EA70bB361Df99C9d9E157250Fd4F3779C);
-        VaultV4 vault = VaultV4(0xc02f071236ce39e25659689093011ae95E5C09D1);
+        AuctionEngineV4 auction = AuctionEngineV4(0x347B063538219961a747192d0656c1b4e382Da2e);
+        MemberRegistryV4 registry = MemberRegistryV4(0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395);
+        VaultV4 vault = VaultV4(0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95);
         IERC20 usdc = IERC20(0x036CbD53842c5426634e7929541eC2318f3dCF7e);
 
         vm.startBroadcast(pk1);
