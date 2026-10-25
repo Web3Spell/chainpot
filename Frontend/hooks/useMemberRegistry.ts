@@ -1,4 +1,5 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useReadContract } from "wagmi";
+import { useContractAction } from "./useContractAction";
 import { CONTRACT_CONFIG } from "../config/hooksConf";
 
 const registryConfig = {
@@ -77,25 +78,7 @@ export function useGetTotalMembers() {
 }
 
 export function useRegisterMember() {
-  const { data: hash, isPending, writeContract, error } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({ hash });
-
-  const registerMember = () => {
-    writeContract({
-      ...registryConfig,
-      functionName: "registerMember",
-      args: [], // self registration
-    });
-  };
-
-  return {
-    registerMember,
-    hash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    error,
-  };
+  const action = useContractAction();
+  const registerMember = () => action.write({ ...registryConfig, functionName: "registerMember", args: [] });
+  return { ...action, registerMember };
 }

@@ -16,11 +16,11 @@ interface NavbarProps {
 
 export function Navbar({ isDarkMode }: NavbarProps) {
   const { toggleTheme } = useTheme();
-  const { isConnected, address } = useAccount();
+  const { address } = useAccount();
   const pathname = usePathname();
 
   const { data: withdrawable } = useWithdrawable(address);
-  const { claim, isPending, isConfirming, isConfirmed } = useClaim();
+  const { claim, isPending, isConfirming } = useClaim();
   const { data: decimals } = useUSDCDecimals();
 
   const navItems = [

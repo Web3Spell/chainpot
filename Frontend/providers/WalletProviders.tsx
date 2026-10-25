@@ -10,8 +10,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { config } from '@/config/wagmi'; // Adjust path as needed
 
-// 1. Initialize React Query Client
-const queryClient = new QueryClient();
+// Poll reads so the page reflects other members' actions without a manual refresh.
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { refetchInterval: 15_000, staleTime: 5_000 } },
+});
 
 // 2. Define Custom Theme (Optional: For stylish/custom look)
 const customTheme = lightTheme({

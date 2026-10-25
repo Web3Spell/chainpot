@@ -2,6 +2,11 @@
 
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
+function preferredDark() {
+  const saved = localStorage.getItem('chainpot-theme');
+  return saved === 'dark' || (saved === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+}
+
 interface ThemeContextType {
   isDarkMode: boolean;
   toggleTheme: () => void;
@@ -10,22 +15,17 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  // Start light on the server and first client render (avoids a hydration mismatch), then apply the preference.
   const [isDarkMode, setIsDarkMode] = useState(false);
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const savedTheme = localStorage.getItem('chainpot-theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const shouldBeDark = savedTheme === 'dark' || (savedTheme === null && prefersDark);
-    
-    setIsDarkMode(shouldBeDark);
-    if (shouldBeDark) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    setMounted(true);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time read of a browser-only preference
+    setIsDarkMode(preferredDark());
   }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+  }, [isDarkMode]);
 
   const toggleTheme = () => {
     setIsDarkMode((prev) => {

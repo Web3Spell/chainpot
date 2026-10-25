@@ -1,121 +1,114 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useReadContract } from "wagmi";
 import { CONTRACT_CONFIG } from "../config/hooksConf";
+import { parseCycle, parsePot, parsePotConfig, type Engine } from "@/lib/pot";
 
-type EngineType = "circle" | "auction";
-
-const getEngineConfig = (type: EngineType) => ({
-  address: (type === "circle" ? CONTRACT_CONFIG.addresses.circleEngine : CONTRACT_CONFIG.addresses.auctionEngine) as `0x${string}`,
-  abi: type === "circle" ? CONTRACT_CONFIG.abis.circleEngine : CONTRACT_CONFIG.abis.auctionEngine,
-});
-
-export function usePotCounter(type: EngineType) {
-  return useReadContract({
-    ...getEngineConfig(type),
-    functionName: "potCounter",
-  });
+// Both engines share RoscaEngineBaseV4's functions with identical signatures, so the circle ABI
+// type is used for shared calls on either engine.
+export function engineContract(engine: Engine) {
+  return {
+    address: (engine === "circle"
+      ? CONTRACT_CONFIG.addresses.circleEngine
+      : CONTRACT_CONFIG.addresses.auctionEngine) as `0x${string}`,
+    abi: (engine === "circle"
+      ? CONTRACT_CONFIG.abis.circleEngine
+      : CONTRACT_CONFIG.abis.auctionEngine) as typeof CONTRACT_CONFIG.abis.circleEngine,
+  };
 }
 
-export function useGetPot(type: "circle" | "auction", potId: number | bigint) {
-  return useReadContract({
-    ...getEngineConfig(type),
+const id = (v: number | bigint | undefined) => BigInt(v || 0);
+
+export function usePotCounter(engine: Engine) {
+  return useReadContract({ ...engineContract(engine), functionName: "potCounter" });
+}
+
+export function usePot(engine: Engine | undefined, potId: number | bigint) {
+  const q = useReadContract({
+    ...engineContract(engine ?? "circle"),
     functionName: "getPot",
-    args: [BigInt(potId || 0)],
+    args: [id(potId)],
+    query: { enabled: !!engine && !!potId },
+  });
+  return { ...q, pot: parsePot(q.data) };
+}
+
+export function usePotConfig(engine: Engine, potId: number | bigint) {
+  const q = useReadContract({
+    ...engineContract(engine),
+    functionName: "getPotConfig",
+    args: [id(potId)],
     query: { enabled: !!potId },
   });
+  return { ...q, config: parsePotConfig(q.data) };
 }
 
-export function useGetCycle(type: EngineType, potId: number | bigint, cycleIdx: number | bigint) {
-  return useReadContract({
-    ...getEngineConfig(type),
+export function useCycle(engine: Engine, potId: number | bigint, cycleIdx: number | bigint) {
+  const q = useReadContract({
+    ...engineContract(engine),
     functionName: "getCycle",
-    args: [BigInt(potId || 0), BigInt(cycleIdx || 0)],
+    args: [id(potId), id(cycleIdx)],
     query: { enabled: !!potId && !!cycleIdx },
   });
+  return { ...q, cycle: parseCycle(q.data) };
 }
 
-export function useGetMembers(type: EngineType, potId: number | bigint) {
+export function useGetMembers(engine: Engine, potId: number | bigint) {
   return useReadContract({
-    ...getEngineConfig(type),
+    ...engineContract(engine),
     functionName: "getMembers",
-    args: [BigInt(potId || 0)],
+    args: [id(potId)],
     query: { enabled: !!potId },
   });
 }
 
-export function useIsMember(type: EngineType, potId: number | bigint, user: `0x${string}` | undefined) {
+export function useDrawReady(engine: Engine, potId: number | bigint, enabled = true) {
   return useReadContract({
-    ...getEngineConfig(type),
+    ...engineContract(engine),
+    functionName: "drawReady",
+    args: [id(potId)],
+    query: { enabled: enabled && !!potId },
+  });
+}
+
+/** Per-member flags for one pot (and its current cycle) in a single hook. */
+export function useMemberState(engine: Engine, potId: number | bigint, cycleIdx: number | bigint, user?: `0x${string}`) {
+  const c = engineContract(engine);
+  const enabled = !!potId && !!user;
+  const isMember = useReadContract({
+    ...c,
     functionName: "isMember",
-    args: user ? [BigInt(potId || 0), user] : undefined,
-    query: { enabled: !!potId && !!user },
+    args: user ? [id(potId), user] : undefined,
+    query: { enabled },
   });
-}
-
-export function usePaidForCycle(type: EngineType, potId: number | bigint, cycleIdx: number | bigint, user: `0x${string}` | undefined) {
-  return useReadContract({
-    ...getEngineConfig(type),
-    functionName: "paidForCycle",
-    args: user ? [BigInt(potId || 0), BigInt(cycleIdx || 0), user] : undefined,
-    query: { enabled: !!potId && !!cycleIdx && !!user },
-  });
-}
-
-export function useDefaulted(type: EngineType, potId: number | bigint, user: `0x${string}` | undefined) {
-  return useReadContract({
-    ...getEngineConfig(type),
-    functionName: "defaulted",
-    args: user ? [BigInt(potId || 0), user] : undefined,
-    query: { enabled: !!potId && !!user },
-  });
-}
-
-export function useHasWonInPot(type: EngineType, potId: number | bigint, user: `0x${string}` | undefined) {
-  return useReadContract({
-    ...getEngineConfig(type),
+  const hasWon = useReadContract({
+    ...c,
     functionName: "hasWonInPot",
-    args: user ? [BigInt(potId || 0), user] : undefined,
-    query: { enabled: !!potId && !!user },
+    args: user ? [id(potId), user] : undefined,
+    query: { enabled },
   });
-}
-
-// Write Hooks
-
-function useEngineWrite(type: EngineType, functionName: string) {
-  const { data: hash, isPending, writeContract, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-
-  const write = (args: any[]) => {
-    writeContract({
-      ...getEngineConfig(type),
-      functionName,
-      args,
-    } as any);
+  const defaulted = useReadContract({
+    ...c,
+    functionName: "defaulted",
+    args: user ? [id(potId), user] : undefined,
+    query: { enabled },
+  });
+  const paid = useReadContract({
+    ...c,
+    functionName: "paidForCycle",
+    args: user ? [id(potId), id(cycleIdx), user] : undefined,
+    query: { enabled: enabled && !!cycleIdx },
+  });
+  const released = useReadContract({
+    ...c,
+    functionName: "slotReleased",
+    args: user ? [id(potId), user] : undefined,
+    query: { enabled },
+  });
+  return {
+    isMember: !!isMember.data,
+    hasWon: !!hasWon.data,
+    defaulted: !!defaulted.data,
+    paid: !!paid.data,
+    slotReleased: !!released.data,
+    isLoading: isMember.isLoading,
   };
-
-  return { write, hash, isPending, isConfirming, isConfirmed, error };
-}
-
-export function useJoinPot(type: EngineType) {
-  const { write, ...rest } = useEngineWrite(type, "joinPot");
-  return { joinPot: (potId: bigint, proof: `0x${string}`[]) => write([potId, proof]), ...rest };
-}
-
-export function useStartPot(type: EngineType) {
-  const { write, ...rest } = useEngineWrite(type, "startPot");
-  return { startPot: (potId: bigint) => write([potId]), ...rest };
-}
-
-export function useStartCycle(type: EngineType) {
-  const { write, ...rest } = useEngineWrite(type, "startCycle");
-  return { startCycle: (potId: bigint) => write([potId]), ...rest };
-}
-
-export function usePayForCycle(type: EngineType) {
-  const { write, ...rest } = useEngineWrite(type, "payForCycle");
-  return { payForCycle: (potId: bigint) => write([potId]), ...rest };
-}
-
-export function useSettleCycle(type: EngineType) {
-  const { write, ...rest } = useEngineWrite(type, "settleCycle");
-  return { settleCycle: (potId: bigint) => write([potId]), ...rest };
 }

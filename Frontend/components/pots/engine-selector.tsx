@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { motion } from "framer-motion";
 
 interface EngineSelectorProps {
@@ -25,7 +24,7 @@ export default function EngineSelector({ onSelect, selected }: EngineSelectorPro
         <div className="text-3xl mb-3">🎲</div>
         <h3 className="text-xl font-bold mb-2">Community Circle</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Random VRF lottery rotation. Best for friends, family, and trusted kitty parties. No bidding required.
+          Take turns: each round a verifiably random draw (Chainlink VRF) picks who receives the pot. Everyone receives once. Best for friends, family and kitty parties.
         </p>
       </motion.button>
 
@@ -43,7 +42,7 @@ export default function EngineSelector({ onSelect, selected }: EngineSelectorPro
         <div className="text-3xl mb-3">🏦</div>
         <h3 className="text-xl font-bold mb-2">Business ROSCA</h3>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          Discount auction system. Best for businesses and yield seekers. Bid for early access, earn yield by waiting.
+          Bid for early payout: members who need money sooner bid to receive less than the full pot. The lowest bid wins and the difference is shared by everyone else.
         </p>
       </motion.button>
     </div>

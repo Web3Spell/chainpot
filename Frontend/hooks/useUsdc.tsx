@@ -1,8 +1,7 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import type { Address } from 'viem';
+import { useAccount, useReadContract } from 'wagmi';
+import { useContractAction } from './useContractAction';
 import { CONTRACT_CONFIG } from '../config/hooksConf';
 
 // Minimal ERC-20 ABI slices we need
@@ -25,6 +24,13 @@ const USDC_ABI = [
       { name: 'owner', type: 'address' },
       { name: 'spender', type: 'address' }
     ],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
     outputs: [{ name: '', type: 'uint256' }]
   },
   {
@@ -81,48 +87,27 @@ export function useUSDCDecimals() {
   };
 }
 
+export function useUSDCBalance(owner?: `0x${string}`) {
+  const { data, isLoading, refetch } = useReadContract({
+    address: CONTRACT_CONFIG.addresses.usdc as `0x${string}`,
+    abi: USDC_ABI,
+    functionName: 'balanceOf',
+    args: owner ? [owner] : undefined,
+    query: { enabled: !!owner },
+  });
+  return { data: data as bigint | undefined, isLoading, refetch };
+}
+
+/** Exact-amount approval of USDC to `spender` (defaults to the Vault). */
 export function useUSDCApprove(spender?: `0x${string}` | null) {
   const spend = spender ?? (CONTRACT_CONFIG.addresses.vault as `0x${string}`);
-  const token = CONTRACT_CONFIG.addresses.usdc as `0x${string}`;
-
-  const { 
-    writeContractAsync, 
-    data: hash, 
-    isPending, 
-    error: writeError 
-  } = useWriteContract();
-
-  const { 
-    isLoading: isConfirming, 
-    isSuccess: isConfirmed,
-    error: confirmError
-  } = useWaitForTransactionReceipt({ hash });
-
-  const approve = useCallback(
-    async (amount: bigint) => {
-      try {
-        const txHash = await writeContractAsync({
-          address: token,
-          abi: USDC_ABI,
-          functionName: 'approve',
-          args: [spend, amount],
-        });
-        
-        return { hash: txHash };
-      } catch (error) {
-        console.error('Approve transaction failed:', error);
-        throw error;
-      }
-    },
-    [writeContractAsync, token, spend]
-  );
-
-  return {
-    approve,
-    hash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    error: writeError ?? confirmError,
-  };
+  const action = useContractAction();
+  const approve = (amount: bigint) =>
+    action.write({
+      address: CONTRACT_CONFIG.addresses.usdc as `0x${string}`,
+      abi: USDC_ABI,
+      functionName: 'approve',
+      args: [spend, amount],
+    });
+  return { ...action, approve };
 }

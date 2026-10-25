@@ -1,6 +1,7 @@
 import { useReadContracts, useReadContract } from "wagmi";
 import { CONTRACT_CONFIG } from "../config/hooksConf";
-import { usePotCounter } from "./useRoscaEngine";
+import { engineContract, usePotCounter } from "./useRoscaEngine";
+import { PotStatus, parsePot } from "@/lib/pot";
 
 export function useGlobalStats() {
   const { data: circleCountRaw } = usePotCounter("circle");
@@ -9,71 +10,54 @@ export function useGlobalStats() {
   const circleCount = Number(circleCountRaw || 0);
   const auctionCount = Number(auctionCountRaw || 0);
 
-  const circleCalls = Array.from({ length: circleCount }).map((_, i) => ({
-    address: CONTRACT_CONFIG.addresses.circleEngine as `0x${string}`,
-    abi: CONTRACT_CONFIG.abis.circleEngine,
-    functionName: "getPot",
-    args: [BigInt(i + 1)],
-  }));
-
-  const auctionCalls = Array.from({ length: auctionCount }).map((_, i) => ({
-    address: CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`,
-    abi: CONTRACT_CONFIG.abis.auctionEngine,
-    functionName: "getPot",
-    args: [BigInt(i + 1)],
-  }));
-
-  const allCalls = [...circleCalls, ...auctionCalls] as any[];
+  const getPot = (engine: "circle" | "auction", id: number) => ({
+    ...engineContract(engine),
+    functionName: "getPot" as const,
+    args: [BigInt(id)] as const,
+  });
+  const calls = [
+    ...Array.from({ length: circleCount }, (_, i) => getPot("circle", i + 1)),
+    ...Array.from({ length: auctionCount }, (_, i) => getPot("auction", i + 1)),
+  ];
 
   const { data: potsData } = useReadContracts({
-    contracts: allCalls,
-    query: {
-      enabled: circleCount > 0 || auctionCount > 0,
-    }
-  } as any);
-
+    contracts: calls,
+    query: { enabled: calls.length > 0 },
+  });
 
   const { data: treasuryInfo } = useReadContract({
     address: CONTRACT_CONFIG.addresses.vault as `0x${string}`,
     abi: CONTRACT_CONFIG.abis.vault,
     functionName: "getTreasuryInfo",
   });
+  const { data: obligations } = useReadContract({
+    address: CONTRACT_CONFIG.addresses.vault as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.vault,
+    functionName: "totalObligations",
+  });
+  const { data: memberTotal } = useReadContract({
+    address: CONTRACT_CONFIG.addresses.memberRegistry as `0x${string}`,
+    abi: CONTRACT_CONFIG.abis.memberRegistry,
+    functionName: "getTotalMembers",
+  });
 
-  let activeContributions = BigInt(0);
   let activePools = 0;
   let completedPools = 0;
-
-  if (potsData) {
-    potsData.forEach((result) => {
-      if (result.status === "success" && result.result) {
-        const res = result.result as any;
-        const status = Number(res[5]);
-        const expectedMembers = BigInt(res[3]);
-        const amountPerCycle = BigInt(res[4]);
-        const currentCycle = BigInt(res[6]);
-
-        if (status === 2) { // Active
-          activePools++;
-          activeContributions += amountPerCycle * expectedMembers * (currentCycle > BigInt(0) ? currentCycle : BigInt(1));
-        } else if (status === 3) { // Completed
-          completedPools++;
-        }
-      }
-    });
-  }
-
-  const totalAccrued = treasuryInfo ? BigInt((treasuryInfo as any)[1] || 0) : BigInt(0);
-  
-  // Previous 30 days is hard to calculate without indexer, so we use a mock ratio for now
-  const prevInterest = totalAccrued / BigInt(3); 
+  potsData?.forEach((result) => {
+    const pot = result.status === "success" ? parsePot(result.result) : undefined;
+    if (pot?.status === PotStatus.Active) activePools++;
+    else if (pot?.status === PotStatus.Completed) completedPools++;
+  });
 
   return {
     totalPools: circleCount + auctionCount,
     activePools,
     completedPools,
-    activeContributions,
-    totalAccrued,
-    prevInterest
+    // Everything the Vault owes: idle backing + unclaimed credits + value still in Compound.
+    totalValueLocked: (obligations as bigint | undefined) ?? BigInt(0),
+    // Cumulative 20% interest share routed to the safety fund (treasury).
+    safetyFundAccrued: treasuryInfo ? (treasuryInfo as readonly unknown[])[1] as bigint : BigInt(0),
+    totalMembers: Number(memberTotal ?? 0),
   };
 }
 

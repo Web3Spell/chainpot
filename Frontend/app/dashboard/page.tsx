@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Navbar } from '@/components/dashboard/navbar';
 import { HeroSection } from '@/components/dashboard/hero-section';
 import { StatsCards } from '@/components/dashboard/stats-card';

@@ -1,6 +1,5 @@
 'use client';
 
-import React from 'react';
 import { useGlobalStats, formatUSDC } from '@/hooks/useGlobalStats';
 
 interface StatsCardsProps {
@@ -8,14 +7,12 @@ interface StatsCardsProps {
 }
 
 export function StatsCards({ isDarkMode }: StatsCardsProps) {
-  const { totalPools, activePools, completedPools, activeContributions } = useGlobalStats();
+  const { totalPools, activePools, completedPools, totalValueLocked, totalMembers } = useGlobalStats();
 
   const totalPoolsDisplay = totalPools;
   const activePoolsDisplay = activePools;
   const completedPoolsDisplay = completedPools;
 
-  const lineValueDisplay = formatUSDC(activeContributions);
-  const barHeights = [40, 60, 70, 50, 80, 65];
 
   return (
     <section className="py-8 space-y-6">
@@ -62,82 +59,18 @@ export function StatsCards({ isDarkMode }: StatsCardsProps) {
           </div>
         </div>
 
-        {/* Active Contributions Line Chart Card */}
         <div className={`border-3 border-black rounded-3xl p-6 backdrop-blur transition-colors ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white/70' : 'text-black/70'}`}>Active Contributions</h3>
-              <div className="flex gap-2">
-                {['7 Days', '2 Weeks', '4 Weeks', '3 Months'].map((time) => (
-                  <button
-                    key={time}
-                    className={`text-xs px-3 py-1 rounded-full transition-colors ${isDarkMode ? 'bg-white/10 border text-white hover:bg-white/20' : 'bg-white border border-black/20 text-black hover:bg-black/5'}`}
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>{lineValueDisplay}</p>
-
-              <svg viewBox="0 0 300 100" className="w-full h-16">
-                <polyline
-                  points="0,80 30,70 60,60 90,50 120,45 150,40 180,35 210,30 240,28 270,25 300,20"
-                  fill="none"
-                  stroke="url(#lineChartGradient)"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <polyline
-                  points="0,80 30,70 60,60 90,50 120,45 150,40 180,35 210,30 240,28 270,25 300,20"
-                  fill="url(#areaGradient)"
-                />
-                <defs>
-                  <linearGradient id="lineChartGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#c084fc" />
-                    <stop offset="100%" stopColor="#a78bfa" />
-                  </linearGradient>
-                  <linearGradient id="areaGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#c084fc" stopOpacity="0.3" />
-                    <stop offset="100%" stopColor="#c084fc" stopOpacity="0" />
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
+          <div className="space-y-3">
+            <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white/70' : 'text-black/70'}`}>Money held by ChainPot</h3>
+            <p className={`text-4xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>{formatUSDC(totalValueLocked)}</p>
+            <p className={`text-sm ${isDarkMode ? 'text-white/60' : 'text-black/60'}`}>Contributions earning interest in Compound plus balances waiting to be claimed.</p>
           </div>
         </div>
-
-        {/* Active Contributions Bar Chart */}
         <div className={`border-3 border-black rounded-3xl p-6 backdrop-blur transition-colors ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white/70' : 'text-black/70'}`}>Active Contributions</h3>
-              <div className="flex gap-2">
-                {['7 Days', '2 Weeks', '4 Weeks', '3 Months'].map((time) => (
-                  <button
-                    key={time}
-                    className={`text-xs px-3 py-1 rounded-full hover:transition-colors ${isDarkMode ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20' : 'bg-white border border-black/20 text-black hover:bg-black/5'}`}
-                  >
-                    {time}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <p className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>{lineValueDisplay}</p>
-
-              <div className="flex items-end justify-around h-24 gap-1">
-                {barHeights.map((height, i) => (
-                  <div key={i} className={`flex-1 rounded-t ${isDarkMode ? 'bg-white' : 'bg-black'}`} style={{ height: `${height}%` }} />
-                ))}
-              </div>
-
-              <p className={`text-xs text-center ${isDarkMode ? 'text-white/50' : 'text-black/50'}`}>Month1 Month2 Month3 Month4 Month5 Month6</p>
-            </div>
+          <div className="space-y-3">
+            <h3 className={`text-sm font-semibold ${isDarkMode ? 'text-white/70' : 'text-black/70'}`}>Registered members</h3>
+            <p className={`text-4xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>{totalMembers}</p>
+            <p className={`text-sm ${isDarkMode ? 'text-white/60' : 'text-black/60'}`}>Accounts registered on ChainPot.</p>
           </div>
         </div>
       </div>

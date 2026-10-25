@@ -1,9 +1,17 @@
 'use client';
 
-import React from 'react';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
-import { useUserActivityEvents } from '@/hooks/useUserActivityEvents';
+import { useUserActivityEvents, type ActivityEvent } from '@/hooks/useUserActivityEvents';
+import { potHref } from '@/lib/pot';
+
+const LABEL: Record<ActivityEvent['type'], string> = {
+  Joined: 'You joined',
+  PotCreated: 'You created this pot',
+  Paid: 'You paid for a round',
+  WinnerSelected: 'You received the payout 🎉',
+  BidPlaced: 'You placed a bid',
+};
 
 interface MyActivitiesProps {
   isDarkMode: boolean;
@@ -28,13 +36,13 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
   }
 
   const joinEvents = events.filter(e => e.type === "Joined" || e.type === "PotCreated");
-  const activityEvents = events.filter(e => e.type === "WinnerSelected" || e.type === "BidPlaced" || e.type === "CycleStarted");
+  const activityEvents = events.filter(e => e.type === "WinnerSelected" || e.type === "BidPlaced" || e.type === "Paid");
 
   return (
     <section className="py-12 space-y-6 pb-16">
       <div className="space-y-2">
         <h2 className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>My Activities</h2>
-        <p className={isDarkMode ? 'text-white/60' : 'text-black/60'}>Recent on-chain activity from your account during this session</p>
+        <p className={isDarkMode ? 'text-white/60' : 'text-black/60'}>Your activity since you opened this page (full history is coming soon)</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -47,9 +55,9 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
                 <div className="flex justify-between items-center">
                   <div>
                     <div className="font-bold text-sm">Pot #{String(ev.args.potId)}</div>
-                    <div className="text-xs text-gray-500">{ev.type}</div>
+                    <div className="text-xs text-gray-500">{LABEL[ev.type]}</div>
                   </div>
-                  <Link href={`/pots/${String(ev.args.potId)}?engine=${ev.engine}`}>
+                  <Link href={potHref(ev.engine, String(ev.args.potId))}>
                     <button className="px-3 py-1 bg-black text-white rounded-full text-xs font-bold">View</button>
                   </Link>
                 </div>
@@ -67,9 +75,9 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
                 <div className="flex justify-between items-center">
                   <div>
                     <div className="font-bold text-sm">Pot #{String(ev.args.potId)}</div>
-                    <div className="text-xs text-gray-500">{ev.type}</div>
+                    <div className="text-xs text-gray-500">{LABEL[ev.type]}</div>
                   </div>
-                  <Link href={`/pots/${String(ev.args.potId)}?engine=${ev.engine}`}>
+                  <Link href={potHref(ev.engine, String(ev.args.potId))}>
                     <button className="px-3 py-1 bg-black text-white rounded-full text-xs font-bold">View</button>
                   </Link>
                 </div>

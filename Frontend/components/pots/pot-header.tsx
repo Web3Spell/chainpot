@@ -1,154 +1,162 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
-import { 
-  useGetPot, 
-  useGetCycle, 
-  useIsMember, 
-  useJoinPot, 
-  useStartPot, 
-  useStartCycle, 
-  useSettleCycle 
-} from '@/hooks/useRoscaEngine';
-import { useDeclareWinner } from '@/hooks/useAuctionEngine';
-import { useDrawWinner } from '@/hooks/useCircleEngine';
+import { engineContract, useMemberState, usePot } from '@/hooks/useRoscaEngine';
+import { useCanJoin, useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
+import { useContractAction } from '@/hooks/useContractAction';
+import { inviteLink, loadInvite, inviteRoot, proofFor, readInviteFromHash, saveInvite } from '@/lib/invite';
+import { PotStatus, engineLabel, sameAddress, shortAddress, type Engine } from '@/lib/pot';
 
 interface PotHeaderProps {
-  potId: string;
-  engine: "circle" | "auction";
+  potId: bigint;
+  engine: Engine;
   isDarkMode: boolean;
+}
+
+/** Invite list for this pot: from the share link (#invite=…) or the local cache, verified against the on-chain root. */
+function useInviteList(merkleRoot?: `0x${string}`) {
+  // Only rendered client-side after the pot loads, so reading window here is safe.
+  const fromHash = useMemo(() => {
+    if (!merkleRoot || typeof window === 'undefined') return undefined;
+    const list = readInviteFromHash(window.location.hash);
+    return list && inviteRoot(list).toLowerCase() === merkleRoot.toLowerCase() ? list : undefined;
+  }, [merkleRoot]);
+  useEffect(() => {
+    if (fromHash) saveInvite(fromHash); // remember it so this member can re-share later
+  }, [fromHash]);
+  return useMemo(() => fromHash ?? (merkleRoot && typeof window !== 'undefined' ? loadInvite(merkleRoot) : undefined), [fromHash, merkleRoot]);
 }
 
 export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
   const { address } = useAccount();
-  const potIdBig = BigInt(potId);
+  const { pot } = usePot(engine, potId);
+  const member = useMemberState(engine, potId, pot?.currentCycle ?? 0, address);
+  const { data: isRegistered } = useIsRegistered(address);
+  const { data: canJoin } = useCanJoin(address);
+  const register = useRegisterMember();
+  const join = useContractAction();
+  const leave = useContractAction();
+  const start = useContractAction();
+  const inviteList = useInviteList(pot?.merkleRoot);
+  const [copied, setCopied] = useState(false);
 
-  const { data: potInfo, isLoading: isPotLoading, refetch: refetchPot } = useGetPot(engine, potIdBig);
-  
-  const creator = potInfo ? (potInfo as any)[0] : undefined;
-  const status = potInfo ? Number((potInfo as any)[5] || 0) : 0;
-  const currentCycleIdx = potInfo ? BigInt((potInfo as any)[6] || 0) : BigInt(0);
-  const completedCycles = potInfo ? BigInt((potInfo as any)[7] || 0) : BigInt(0);
-  const expectedMembers = potInfo ? BigInt((potInfo as any)[3] || 0) : BigInt(0);
-  
-  const { data: cycleInfo, isLoading: isCycleLoading, refetch: refetchCycle } = useGetCycle(engine, potIdBig, currentCycleIdx);
-  const cycleStatus = cycleInfo ? (cycleInfo as any)[5] : 0;
-  
-  const { data: isMember, refetch: refetchMember } = useIsMember(engine, potIdBig, address);
+  const shareUrl = useMemo(
+    () => (inviteList && typeof window !== 'undefined' ? inviteLink(window.location.origin, engine, potId, inviteList) : undefined),
+    [inviteList, engine, potId],
+  );
 
-  const isCreator = address && creator && address.toLowerCase() === String(creator).toLowerCase();
+  if (!pot) return null;
 
-  const { joinPot, isPending: isJoinPending, isConfirming: isJoinConfirming, isConfirmed: isJoinConfirmed } = useJoinPot(engine);
-  const { startPot, isPending: isStartPotPending, isConfirming: isStartPotConfirming, isConfirmed: isStartPotConfirmed } = useStartPot(engine);
-  const { startCycle, isPending: isStartCyclePending, isConfirming: isStartCycleConfirming, isConfirmed: isStartCycleConfirmed } = useStartCycle(engine);
-  const { settleCycle, isPending: isSettlePending, isConfirming: isSettleConfirming, isConfirmed: isSettleConfirmed } = useSettleCycle(engine);
-  const { declareWinner, isPending: isDeclarePending, isConfirming: isDeclareConfirming, isConfirmed: isDeclareConfirmed } = useDeclareWinner();
-  const { drawWinner, isPending: isDrawPending, isConfirming: isDrawConfirming, isConfirmed: isDrawConfirmed } = useDrawWinner();
+  const contract = engineContract(engine);
+  const isOpen = pot.status === PotStatus.Open;
+  const isCreator = sameAddress(address, pot.creator);
+  const isFull = pot.memberCount >= pot.expectedMembers;
+  const onList = !!address && !!inviteList?.some((a) => sameAddress(a, address));
+  const proof = address && inviteList ? proofFor(inviteList, address) : undefined;
+  const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
 
-  const isBusy = isJoinPending || isJoinConfirming || isStartPotPending || isStartPotConfirming || isStartCyclePending || isStartCycleConfirming || isSettlePending || isSettleConfirming || isDeclarePending || isDeclareConfirming || isDrawPending || isDrawConfirming;
+  const statusText =
+    pot.status === PotStatus.Open ? `Waiting for members (${pot.memberCount} of ${pot.expectedMembers} joined)`
+    : pot.status === PotStatus.Active ? `Active · round ${pot.currentCycle} of ${pot.expectedMembers}`
+    : 'Completed';
 
-  useEffect(() => {
-    if (isJoinConfirmed || isStartPotConfirmed || isStartCycleConfirmed || isSettleConfirmed || isDeclareConfirmed || isDrawConfirmed) {
-      setTimeout(() => {
-        refetchPot();
-        refetchCycle();
-        refetchMember();
-      }, 2000);
-    }
-  }, [isJoinConfirmed, isStartPotConfirmed, isStartCycleConfirmed, isSettleConfirmed, isDeclareConfirmed, isDrawConfirmed, refetchPot, refetchCycle, refetchMember]);
-
-  const handleJoin = async () => {
-    if (!address) return;
+  const copyLink = async () => {
+    if (!shareUrl) return;
     try {
-      const stored = localStorage.getItem(`merkle_${(potInfo as any)[1]}`);
-      if (!stored) {
-        alert("You do not have a Merkle proof to join this pot. Please ask the creator for the invite link.");
-        return;
-      }
-      const proofs = JSON.parse(stored);
-      const myProof = proofs.find((p: any) => p.address.toLowerCase() === address.toLowerCase());
-      if (!myProof) {
-        alert("Your address is not in the whitelist for this pot.");
-        return;
-      }
-      joinPot(potIdBig, myProof.proof);
-    } catch (e: any) {
-      alert("Error joining: " + e.message);
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('Copy this invite link', shareUrl);
     }
   };
 
-  const getStatusText = () => {
-    if (status <= 1) return "Open (Waiting for members)";
-    if (status === 2) return "Active";
-    return "Completed";
+  const handleLeave = () => {
+    if (!window.confirm('Leave this pot? Leaving lowers your reputation slightly, and you must wait 24 hours to rejoin.')) return;
+    leave.write({ ...contract, functionName: 'leavePot', args: [potId] });
   };
 
-  if (isPotLoading) return <div className="h-36 rounded-lg animate-pulse bg-white/10 mb-8" />;
+  // ---- Join call-to-action, in the order a new member hits each requirement ----
+  let joinCta: React.ReactNode = null;
+  if (isOpen && !member.isMember) {
+    const btn = `px-6 py-3 rounded-full font-bold transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`;
+    if (!address) joinCta = <p className={`text-sm font-medium ${muted}`}>Connect your wallet to join.</p>;
+    else if (isFull) joinCta = <p className={`text-sm font-medium ${muted}`}>This pot is full.</p>;
+    else if (!inviteList) joinCta = <p className={`text-sm font-medium ${muted}`}>Open the invite link the creator shared with you to join.</p>;
+    else if (!onList || !proof) joinCta = <p className="text-sm font-medium text-red-500">Your connected address isn&apos;t on this pot&apos;s invite list.</p>;
+    else if (isRegistered === false) {
+      joinCta = (
+        <button onClick={register.registerMember} disabled={register.isBusy} className={btn}>
+          {register.isPending ? 'Confirm in wallet…' : register.isConfirming ? 'Registering…' : 'Step 1 of 2: Register account'}
+        </button>
+      );
+    } else if (canJoin === false) joinCta = <p className="text-sm font-medium text-red-500">Your account can&apos;t join pots right now (reputation too low or blacklisted).</p>;
+    else {
+      joinCta = (
+        <button onClick={() => join.write({ ...contract, functionName: 'joinPot', args: [potId, proof] })} disabled={join.isBusy} className={btn}>
+          {join.isPending ? 'Confirm in wallet…' : join.isConfirming ? 'Joining…' : 'Join Pot'}
+        </button>
+      );
+    }
+  }
+
+  const errorMessage = join.errorMessage ?? register.errorMessage ?? leave.errorMessage ?? start.errorMessage;
 
   return (
     <section className="mb-8">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-6">
         <div>
           <Link href="/pots" className={`text-sm font-bold mb-4 inline-block transition-opacity ${isDarkMode ? 'text-white/60 hover:text-white' : 'text-black/60 hover:text-black'}`}>← Back to Pots</Link>
-          <h1 className="text-5xl font-black mb-2">Pot #{potId}</h1>
-          <p className={`text-lg ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-            {engine === 'circle' ? '🎲 Community Circle' : '🏦 Business ROSCA'} • Created by {creator ? `${String(creator).slice(0, 8)}...` : ''}
+          <h1 className="text-5xl font-black mb-2">Pot #{potId.toString()}</h1>
+          <p className={`text-lg ${muted}`}>
+            {engine === 'circle' ? '🎲' : '🏦'} {engineLabel(engine)} · Created by {isCreator ? 'you' : shortAddress(pot.creator)}
           </p>
         </div>
 
-        <div className="flex gap-3 flex-wrap">
-          {!isMember && status <= 1 && (
-            <button onClick={handleJoin} disabled={isBusy} className={`px-6 py-3 rounded-full font-bold transition-all duration-300 ${isDarkMode ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`}>
-              {isJoinPending || isJoinConfirming ? 'Joining...' : 'Join Pot'}
+        <div className="flex gap-3 flex-wrap items-center">
+          {joinCta}
+
+          {isOpen && member.isMember && !isCreator && (
+            <button onClick={handleLeave} disabled={leave.isBusy} className={`px-6 py-3 rounded-full font-bold border-3 disabled:opacity-50 ${isDarkMode ? 'border-white/30 text-white' : 'border-black text-black'}`}>
+              {leave.isBusy ? 'Leaving…' : 'Leave Pot'}
             </button>
           )}
 
-          {isCreator && status <= 1 && (
-            <button onClick={() => startPot(potIdBig)} disabled={isBusy} className={`px-6 py-3 rounded-full font-bold border-3 transition-all duration-300 ${isDarkMode ? 'border-white/30 text-white hover:bg-white/10' : 'border-black text-black hover:bg-black/10'}`}>
-              {isStartPotPending || isStartPotConfirming ? 'Starting...' : 'Start Pot (Freeze Roster)'}
-            </button>
-          )}
-
-          {isCreator && status === 2 && (cycleStatus === 0 || cycleStatus === 3) && completedCycles < expectedMembers && (
-            <button onClick={() => startCycle(potIdBig)} disabled={isBusy} className={`px-6 py-3 rounded-full font-bold border-3 transition-all duration-300 ${isDarkMode ? 'border-white/30 text-white hover:bg-white/10' : 'border-black text-black hover:bg-black/10'}`}>
-              {isStartCyclePending || isStartCycleConfirming ? 'Starting...' : 'Start Next Cycle'}
-            </button>
-          )}
-
-          {isCreator && status === 2 && cycleStatus === 1 && (
-            <button onClick={() => settleCycle(potIdBig)} disabled={isBusy} className={`px-6 py-3 rounded-full font-bold transition-all duration-300 bg-red-500 text-white hover:bg-red-600`}>
-              {isSettlePending || isSettleConfirming ? 'Settling...' : 'Settle Defaults (After Deadline)'}
-            </button>
-          )}
-
-          {isCreator && status === 2 && engine === 'auction' && cycleStatus === 1 && (
-            <button onClick={() => declareWinner(potIdBig)} disabled={isBusy} className={`px-6 py-3 rounded-full font-bold transition-all duration-300 bg-blue-500 text-white hover:bg-blue-600`}>
-              {isDeclarePending || isDeclareConfirming ? 'Declaring...' : 'Declare Winner (After Bidding)'}
-            </button>
-          )}
-
-          {isCreator && status === 2 && engine === 'circle' && cycleStatus === 1 && (
-            <button onClick={() => drawWinner(potIdBig)} disabled={isBusy} className={`px-6 py-3 rounded-full font-bold transition-all duration-300 bg-blue-500 text-white hover:bg-blue-600`}>
-              {isDrawPending || isDrawConfirming ? 'Drawing...' : 'Draw Winner (Request VRF)'}
+          {isCreator && isOpen && (
+            <button
+              onClick={() => start.write({ ...contract, functionName: 'startPot', args: [potId] })}
+              disabled={!isFull || start.isBusy}
+              title={isFull ? undefined : 'Everyone on the invite list must join first'}
+              className={`px-6 py-3 rounded-full font-bold border-3 transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'border-white/30 text-white hover:bg-white/10' : 'border-black text-black hover:bg-black/10'}`}
+            >
+              {start.isPending ? 'Confirm in wallet…' : start.isConfirming ? 'Starting…' : isFull ? 'Start Pot' : `Start Pot (${pot.memberCount}/${pot.expectedMembers} joined)`}
             </button>
           )}
         </div>
       </div>
 
+      {errorMessage && <p className="mb-4 text-sm font-medium text-red-500">{errorMessage}</p>}
+
       <div className={`p-4 rounded-xl border-2 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div className="flex items-center gap-2">
-            <span className={`w-3 h-3 rounded-full ${status === 2 ? 'bg-green-500' : 'bg-yellow-500'}`} />
-            <span className="font-bold">{getStatusText()}</span>
+            <span className={`w-3 h-3 rounded-full ${pot.status === PotStatus.Active ? 'bg-green-500' : pot.status === PotStatus.Open ? 'bg-yellow-500' : 'bg-gray-400'}`} />
+            <span className="font-bold">{statusText}</span>
+            {member.isMember && <span className="ml-2 text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-600 font-bold">You&apos;re a member</span>}
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-semibold">
-              Cycle {Number(currentCycleIdx)} / {Number(expectedMembers)}
-            </span>
-          </div>
+          {isOpen && shareUrl && (
+            <button onClick={copyLink} className="text-sm font-bold underline">
+              {copied ? 'Invite link copied ✓' : 'Copy invite link'}
+            </button>
+          )}
         </div>
+        {isOpen && isCreator && !shareUrl && (
+          <p className={`mt-3 text-xs ${muted}`}>
+            The invite list for this pot isn&apos;t saved in this browser, so the invite link can&apos;t be generated here. Open the pot from the browser you created it in.
+          </p>
+        )}
       </div>
     </section>
   );

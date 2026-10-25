@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { motion, useAnimation } from 'framer-motion';
+import { ConnectButton, useConnectModal } from '@rainbow-me/rainbowkit';
+import { motion, type Variants } from 'framer-motion';
 import { clashDisplaySemibold } from './ui/fonts';
 
 import { useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
@@ -25,7 +25,8 @@ export default function Home() {
     refetch: refetchRegistration,
   } = useIsRegistered(address as `0x${string}`);
 
-  const { registerMember, isPending: isRegistering, isConfirming, isConfirmed, error } = useRegisterMember();
+  const { registerMember, isPending: isRegistering, isConfirming, isConfirmed, errorMessage } = useRegisterMember();
+  const { openConnectModal } = useConnectModal();
 
   useEffect(() => {
     if (isConfirmed) {
@@ -40,13 +41,6 @@ export default function Home() {
     }
   }, [isConfirmed, refetchRegistration, router]);
 
-  useEffect(() => {
-    if (error) {
-      console.error('Registration error', error);
-      alert(error.message || 'Registration failed. See console for details.');
-      setCheckingStatus(false);
-    }
-  }, [error]);
 
   const [activeNav, setActiveNav] = useState('home');
 
@@ -62,7 +56,7 @@ export default function Home() {
       setCheckingStatus(true);
       try {
         await refetchRegistration?.();
-      } catch (e) {
+      } catch {
         // ignore
       } finally {
         setCheckingStatus(false);
@@ -73,7 +67,7 @@ export default function Home() {
 
   const handleGetStarted = async () => {
     if (!isConnected || !address) {
-      alert('Please connect your wallet first.');
+      openConnectModal?.();
       return;
     }
 
@@ -104,14 +98,13 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Error checking registration:', err);
-      alert('Could not verify registration. Try again.');
     } finally {
       setCheckingStatus(false);
     }
   };
 
   const handleRegister = () => {
-    if (!address) return alert('Wallet not connected');
+    if (!address) return openConnectModal?.();
     registerMember();
   };
 
@@ -127,7 +120,7 @@ export default function Home() {
     },
   };
 
-  const itemVariants: any = {
+  const itemVariants: Variants = {
     hidden: { y: 30, opacity: 0 },
     visible: {
       y: 0,
@@ -139,7 +132,7 @@ export default function Home() {
     },
   };
 
-  const headerVariants: any = {
+  const headerVariants: Variants = {
     hidden: { y: -100, opacity: 0 },
     visible: {
       y: 0,
@@ -151,7 +144,7 @@ export default function Home() {
     },
   };
 
-  const titleVariants: any = {
+  const titleVariants: Variants = {
     hidden: { scale: 0.8, opacity: 0 },
     visible: {
       scale: 1,
@@ -163,7 +156,7 @@ export default function Home() {
     },
   };
 
-  const buttonVariants: any= {
+  const buttonVariants: Variants = {
     hidden: { scale: 0.8, opacity: 0 },
     visible: {
       scale: 1,
@@ -185,7 +178,7 @@ export default function Home() {
     tap: { scale: 0.95 },
   };
 
-  const modalVariants: any = {
+  const modalVariants: Variants = {
     hidden: { opacity: 0, scale: 0.8, y: 50 },
     visible: {
       opacity: 1,
@@ -326,7 +319,7 @@ export default function Home() {
               variants={itemVariants}
               className="text-lg md:text-xl text-white/80 leading-relaxed font-light max-w-3xl mx-auto"
             >
-              Revolutionary rotating savings and credit associations powered by blockchain.
+              Save together with people you trust. Everyone chips in each round, one person gets the pot, and waiting money earns interest.
             </motion.p>
 
             <motion.div
@@ -412,9 +405,7 @@ export default function Home() {
                   transition={{ delay: 0.1 }}
                   className="text-white/70 mb-6"
                 >
-                  You are not registered yet.
-                  <br />
-                  Press the button below to register your account on-chain.
+                  One quick, one-time step: register your account so you can create and join pots.
                 </motion.p>
 
                 <motion.button
@@ -440,6 +431,8 @@ export default function Home() {
                     'Register'
                   )}
                 </motion.button>
+
+                {errorMessage && <p className="text-red-400 text-sm mt-3">{errorMessage}</p>}
 
                 <motion.button
                   initial={{ opacity: 0, y: 10 }}

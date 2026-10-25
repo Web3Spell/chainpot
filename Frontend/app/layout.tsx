@@ -5,9 +5,8 @@ import { Providers } from '@/providers/WalletProviders'
 import { ThemeProvider } from '@/providers/theme-provider'
 
 export const metadata: Metadata = {
-  title: 'ChainPot - Blockchain Savings & Credit',
-  description: 'Revolutionary rotating savings and credit associations powered by blockchain. Pool funds, earn yield, and access capital through transparent Dutch auctions.',
-  generator: 'v0.app',
+  title: 'ChainPot — Rotating savings with friends',
+  description: 'Save together in a rotating pot: everyone contributes each round, one member receives the pot, and waiting money earns interest.',
   icons: {
     icon: [
       {

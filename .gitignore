@@ -60,3 +60,4 @@ marketing-video/
 *.swo
 *~
 
+!.env.example

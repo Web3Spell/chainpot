@@ -1,4 +1,5 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useReadContract } from "wagmi";
+import { useContractAction } from "./useContractAction";
 import { CONTRACT_CONFIG } from "../config/hooksConf";
 
 const vaultConfig = {
@@ -31,27 +32,12 @@ export function useTreasuryBps() {
   });
 }
 
+export function useTotalObligations() {
+  return useReadContract({ ...vaultConfig, functionName: "totalObligations" });
+}
+
 export function useClaim() {
-  const { data: hash, isPending, writeContract, error } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess: isConfirmed } =
-    useWaitForTransactionReceipt({
-      hash,
-    });
-
-  const claim = () => {
-    writeContract({
-      ...vaultConfig,
-      functionName: "claim",
-    });
-  };
-
-  return {
-    claim,
-    hash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    error,
-  };
+  const action = useContractAction();
+  const claim = () => action.write({ ...vaultConfig, functionName: "claim" });
+  return { ...action, claim };
 }
