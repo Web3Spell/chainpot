@@ -49,8 +49,8 @@ export function AutopayCard({ potId, engine, isDarkMode }: { potId: bigint; engi
   if (!available || !pot) return null;
 
   const mine = mandates.data?.find((m) => m.engine === engine && m.potId === potId.toString() && m.status === 'active');
-  const card = `p-6 rounded-2xl border-3 border-black mb-8 ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`;
-  const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
+  const card = `p-6 rounded-3xl border-3 border-cp-line mb-8 bg-cp-surface text-cp-ink`;
+  const muted = 'text-cp-muted';
 
   const turnOn = async () => {
     setError(null);
@@ -117,7 +117,7 @@ export function AutopayCard({ potId, engine, isDarkMode }: { potId: bigint; engi
           {busy === 'on' ? 'Turning on…' : busy === 'off' ? 'Turning off…' : mine ? 'Turn off autopay' : 'Turn on autopay'}
         </button>
       </div>
-      {error && <p className="mt-3 text-sm font-medium text-red-500">{error}</p>}
+      {error && <p className="mt-3 text-sm font-medium text-cp-danger">{error}</p>}
     </section>
   );
 }

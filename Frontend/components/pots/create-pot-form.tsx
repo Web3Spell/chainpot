@@ -1,274 +1,294 @@
 'use client';
 
-import { useChainPotAccount } from '@/lib/aa/account';
-import { useEffect, useMemo, useState, memo, type ChangeEvent } from 'react';
-import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft, Check } from 'lucide-react';
 import { parseEventLogs, parseUnits } from 'viem';
+import { useChainPotAccount } from '@/lib/aa/account';
+import { apiFetch } from '@/lib/aa/api';
 import { contractCall, useContractAction } from '@/hooks/useContractAction';
 import { auctionContract, circleContract } from '@/hooks/useAuctionEngine';
 import { registerMemberCall, useCanCreate, useIsRegistered } from '@/hooks/useMemberRegistry';
+import { useMoney } from '@/components/money';
+import { formatUsd } from '@/lib/currency';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import EngineSelector from './engine-selector';
 import { buildInviteTree, normalizeAddresses, publishInvite, saveInvite } from '@/lib/invite';
 import {
-  MAX_MEMBERS,
-  MIN_AMOUNT_PER_CYCLE,
-  MIN_BIDDING_PHASE,
-  MIN_MEMBERS,
-  MIN_PAYMENT_WINDOW,
-  formatDuration,
-  potHref,
-  type Engine,
+  MAX_MEMBERS, MIN_AMOUNT_PER_CYCLE, MIN_BIDDING_PHASE, MIN_MEMBERS, MIN_PAYMENT_WINDOW, formatDuration, potHref, type Engine,
 } from '@/lib/pot';
-
-interface CreatePotFormProps {
-  isDarkMode: boolean;
-}
-
-interface FormData {
-  amountPerCycle: string;
-  cycleDuration: string;
-  paymentWindow: string;
-  biddingWindow: string;
-  memberAddresses: string;
-}
-
-type Errors = Partial<Record<keyof FormData, string>>;
-
-interface FormInputProps {
-  label: string;
-  hint?: string;
-  name: keyof FormData;
-  type?: string;
-  placeholder?: string;
-  value: string;
-  onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
-  error?: string;
-  isDarkMode: boolean;
-}
-
-const FormInput = memo(({ label, hint, name, type = 'text', placeholder, value, onChange, error, isDarkMode }: FormInputProps) => {
-  const cls = `px-4 py-3 rounded-lg border-2 transition-colors duration-300 ${
-    error ? (isDarkMode ? 'border-red-500/50 bg-red-500/10' : 'border-red-500 bg-red-50')
-          : (isDarkMode ? ' text-white bg-white/5' : 'bg-white border-black text-black hover:bg-black/5')
-  } focus:outline-none`;
-  return (
-    <div className="flex flex-col gap-2">
-      <label htmlFor={name} className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>{label}</label>
-      {type === 'textarea' ? (
-        <textarea id={name} name={name} value={value} onChange={onChange} placeholder={placeholder} rows={5} className={cls} />
-      ) : (
-        <input id={name} type={type} step="any" min="0" name={name} value={value} onChange={onChange} placeholder={placeholder} className={cls} />
-      )}
-      {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
-      {error && <p className="text-xs text-red-500 font-medium">{error}</p>}
-    </div>
-  );
-});
-FormInput.displayName = 'FormInput';
 
 const DAY = 86_400;
 const USDC_DECIMALS = 6;
+const EMOJI = ['🏠', '👨‍👩‍👧', '💼', '🎉', '🌱', '🕌', '🛕', '⭐'];
 
-function toSeconds(days: string) {
-  const n = Number(days);
-  return Number.isFinite(n) ? Math.round(n * DAY) : NaN;
-}
+/** Frequency presets fill in every timing rule the contract checks, so most people never see them. */
+const PRESETS = {
+  weekly: { label: 'Weekly', every: 7 * DAY, pay: 2 * DAY, bid: 3 * DAY },
+  biweekly: { label: 'Every 2 weeks', every: 14 * DAY, pay: 3 * DAY, bid: 4 * DAY },
+  monthly: { label: 'Monthly', every: 30 * DAY, pay: 5 * DAY, bid: 6 * DAY },
+  custom: { label: 'Custom', every: 0, pay: 0, bid: 0 },
+} as const;
+type PresetKey = keyof typeof PRESETS;
 
-export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
+const STEPS = ['Name', 'Money', 'Receiver', 'Members', 'Review'] as const;
+
+const field =
+  'w-full min-h-11 px-4 py-3 rounded-xl border-2 border-cp-line bg-cp-surface text-cp-ink placeholder:text-cp-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent';
+const days = (s: string) => {
+  const n = Number(s);
+  return Number.isFinite(n) && n > 0 ? Math.round(n * DAY) : NaN;
+};
+
+export function CreatePotForm({}: { isDarkMode: boolean }) {
   const router = useRouter();
-  const { address } = useChainPotAccount();
-
-  const [engine, setEngine] = useState<Engine>('circle');
-  const [includeMe, setIncludeMe] = useState(true);
-  const [formData, setFormData] = useState<FormData>({
-    amountPerCycle: '',
-    cycleDuration: '7',
-    paymentWindow: '2',
-    biddingWindow: '3',
-    memberAddresses: '',
-  });
-  const [errors, setErrors] = useState<Errors>({});
-
-  const { data: isRegistered, isLoading: regLoading } = useIsRegistered(address);
-  const { data: canCreate } = useCanCreate(address);
+  const account = useChainPotAccount();
+  const money = useMoney();
+  const { data: isRegistered, isLoading: regLoading } = useIsRegistered(account.address);
+  const { data: canCreate } = useCanCreate(account.address);
   const create = useContractAction();
 
-  // Final, deduplicated roster: the contract's memberCount must equal the invite-list size exactly.
-  const roster = useMemo(() => {
-    const entries = formData.memberAddresses.split(/[\s,;]+/);
-    if (includeMe && address) entries.unshift(address);
-    return normalizeAddresses(entries);
-  }, [formData.memberAddresses, includeMe, address]);
+  const [step, setStep] = useState(0);
+  const [name, setName] = useState('');
+  const [emoji, setEmoji] = useState(EMOJI[0]);
+  const [amount, setAmount] = useState('');
+  const [preset, setPreset] = useState<PresetKey>('monthly');
+  const [custom, setCustom] = useState({ every: '30', pay: '5', bid: '6' });
+  const [engine, setEngine] = useState<Engine>('circle');
+  const [includeMe, setIncludeMe] = useState(true);
+  const [addresses, setAddresses] = useState('');
+  const [submitted, setSubmitted] = useState<{ engine: Engine; addresses: `0x${string}`[]; name: string; emoji: string } | null>(null);
 
-  const [submitted, setSubmitted] = useState<{ engine: Engine; addresses: `0x${string}`[] } | null>(null);
+  const roster = useMemo(() => {
+    const entries = addresses.split(/[\s,;]+/);
+    if (includeMe && account.address) entries.unshift(account.address);
+    return normalizeAddresses(entries);
+  }, [addresses, includeMe, account.address]);
+
+  const schedule = preset === 'custom' ? { every: days(custom.every), pay: days(custom.pay), bid: days(custom.bid) } : PRESETS[preset];
+  const amountUnits = useMemo(() => {
+    try {
+      return amount ? parseUnits(amount, USDC_DECIMALS) : BigInt(0);
+    } catch {
+      return BigInt(-1);
+    }
+  }, [amount]);
+  const n = roster.valid.length;
+
+  // Per-step validation, mirroring the contract's createPot checks.
+  const errors: Record<number, string | undefined> = {
+    0: name.trim().length < 1 ? 'Give your circle a name' : undefined,
+    1: amountUnits < BigInt(0) ? 'Enter a valid amount'
+      : amountUnits < MIN_AMOUNT_PER_CYCLE ? 'Minimum is $1 per round'
+      : !(schedule.every > 0) ? 'Choose how often'
+      : !(schedule.pay >= MIN_PAYMENT_WINDOW) ? 'Members need at least 1 day to pay'
+      : schedule.pay >= schedule.every ? 'Time to pay must be shorter than the round'
+      : undefined,
+    2: engine === 'auction' && !(schedule.bid >= schedule.pay + MIN_BIDDING_PHASE) ? 'Bidding must close at least 1 hour after payments close — adjust the schedule'
+      : engine === 'auction' && schedule.bid >= schedule.every ? 'Bidding must close before the round ends — adjust the schedule'
+      : undefined,
+    3: roster.invalid.length ? `Not valid addresses: ${roster.invalid.slice(0, 2).join(', ')}${roster.invalid.length > 2 ? '…' : ''}`
+      : n < MIN_MEMBERS ? `A circle needs at least ${MIN_MEMBERS} members` : n > MAX_MEMBERS ? `At most ${MAX_MEMBERS} members` : undefined,
+    4: isRegistered === true && canCreate === false ? 'Your account can’t create circles right now' : undefined,
+  };
+  const firstInvalid = [0, 1, 2, 3].find((i) => errors[i]);
 
   useEffect(() => {
     if (!create.isConfirmed || !create.receipt || !submitted) return;
     const abi = submitted.engine === 'circle' ? circleContract.abi : auctionContract.abi;
     const [created] = parseEventLogs({ abi, eventName: 'PotCreated', logs: create.receipt.logs });
     if (!created) return;
+    const potId = created.args.potId;
     saveInvite(submitted.addresses);
-    // Share the list server-side so invitees can join from a short link; don't block navigation on it.
-    void publishInvite(submitted.engine, created.args.potId, submitted.addresses);
-    router.push(`${potHref(submitted.engine, created.args.potId)}&created=1`);
-  }, [create.isConfirmed, create.receipt, submitted, router]);
+    void (async () => {
+      // Best effort: neither may block opening the new circle.
+      await Promise.allSettled([
+        publishInvite(submitted.engine, potId, submitted.addresses),
+        account.getIdentityToken
+          ? apiFetch(account, '/api/pots/meta', { method: 'PUT', body: JSON.stringify({ engine: submitted.engine, potId: potId.toString(), name: submitted.name, emoji: submitted.emoji }) })
+          : Promise.resolve(),
+      ]);
+      router.push(`${potHref(submitted.engine, potId)}&created=1#invite`);
+    })();
+  }, [create.isConfirmed, create.receipt, submitted, router, account]);
 
-  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    if (errors[name as keyof FormData]) setErrors((prev) => ({ ...prev, [name]: undefined }));
-  };
-
-  const validate = (): Errors => {
-    const e: Errors = {};
-    let amount = BigInt(0);
-    try {
-      amount = parseUnits(formData.amountPerCycle || '0', USDC_DECIMALS);
-    } catch {
-      e.amountPerCycle = 'Enter a valid amount';
-    }
-    if (!e.amountPerCycle && amount < MIN_AMOUNT_PER_CYCLE) e.amountPerCycle = 'Minimum is 1 USDC per round';
-
-    const cycle = toSeconds(formData.cycleDuration);
-    const pay = toSeconds(formData.paymentWindow);
-    const bid = toSeconds(formData.biddingWindow);
-    if (!(cycle > 0)) e.cycleDuration = 'Enter how long each round lasts';
-    if (!(pay >= MIN_PAYMENT_WINDOW)) e.paymentWindow = 'Members need at least 1 day to pay';
-    else if (cycle > 0 && pay >= cycle) e.paymentWindow = 'Must be shorter than the round length';
-    if (engine === 'auction') {
-      if (!(bid >= pay + MIN_BIDDING_PHASE)) e.biddingWindow = 'Must be at least 1 hour after the payment deadline';
-      else if (cycle > 0 && bid >= cycle) e.biddingWindow = 'Must close before the round ends';
-    }
-
-    const n = roster.valid.length;
-    if (roster.invalid.length) e.memberAddresses = `Not valid addresses: ${roster.invalid.slice(0, 3).join(', ')}${roster.invalid.length > 3 ? '…' : ''}`;
-    else if (n < MIN_MEMBERS) e.memberAddresses = `A pot needs at least ${MIN_MEMBERS} members`;
-    else if (n > MAX_MEMBERS) e.memberAddresses = `A pot can have at most ${MAX_MEMBERS} members`;
-    return e;
-  };
-
-  const handleSubmit = (ev: React.FormEvent) => {
-    ev.preventDefault();
-    if (create.isBusy) return;
-    const e = validate();
-    setErrors(e);
-    if (Object.keys(e).length) return;
-
-    const addresses = roster.valid;
-    const root = buildInviteTree(addresses).root as `0x${string}`;
-    const amount = parseUnits(formData.amountPerCycle, USDC_DECIMALS);
-    const n = BigInt(addresses.length);
-    const cycle = BigInt(toSeconds(formData.cycleDuration));
-    const pay = BigInt(toSeconds(formData.paymentWindow));
-    setSubmitted({ engine, addresses });
-
+  const submit = () => {
+    if (create.isBusy || firstInvalid !== undefined || errors[4]) return;
+    const list = roster.valid;
+    const root = buildInviteTree(list).root as `0x${string}`;
+    const args = [root, BigInt(list.length), amountUnits, BigInt(schedule.every), BigInt(schedule.pay)] as const;
     const createCall = engine === 'circle'
-      ? contractCall({ ...circleContract, functionName: 'createPot', args: [root, n, amount, cycle, pay] })
-      : contractCall({ ...auctionContract, functionName: 'createPot', args: [root, n, amount, cycle, pay, BigInt(toSeconds(formData.biddingWindow))] });
-    // First-time creators are registered in the same action.
+      ? contractCall({ ...circleContract, functionName: 'createPot', args })
+      : contractCall({ ...auctionContract, functionName: 'createPot', args: [...args, BigInt(schedule.bid)] });
+    setSubmitted({ engine, addresses: list, name: name.trim(), emoji });
     create.writeBatch(isRegistered === false ? [registerMemberCall(), createCall] : [createCall]);
   };
 
-  const n = roster.valid.length;
-  const amountNum = Number(formData.amountPerCycle) || 0;
-  const cycleSecs = toSeconds(formData.cycleDuration) || 0;
-  const summary = n >= MIN_MEMBERS && amountNum > 0 && cycleSecs > 0
-    ? `${n} members each put in $${amountNum.toLocaleString()} every ${formatDuration(cycleSecs)} for ${n} rounds. Each round one member receives about $${(amountNum * n).toLocaleString()}${engine === 'auction' ? ' (less if they bid for it early)' : ''}.`
+  const perRound = amountUnits > BigInt(0) && n >= MIN_MEMBERS ? amountUnits * BigInt(n) : undefined;
+  // The review is a commitment, so show the exact dollar amount next to any local estimate.
+  const exact = (v: bigint) => (money(v) === formatUsd(v) ? formatUsd(v) : `${money(v)} (${formatUsd(v)})`);
+  const cadence = preset === 'custom' ? `every ${formatDuration(schedule.every || 0)}` : PRESETS[preset].label.toLowerCase();
+  const summary = perRound !== undefined
+    ? `${n} people each put in ${exact(amountUnits)} ${cadence}. Each round one person receives ${exact(perRound)}${engine === 'auction' ? ' (or less, if they bid to get it early)' : ''}. After ${n} rounds, everyone has received once.`
     : null;
 
-  const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
-  const blocked = !!address && isRegistered === true && canCreate === false;
-
   return (
-    <div className="mb-12">
-      <div className="mb-8">
-        <h1 className="text-5xl md:text-6xl font-black mb-4">
-          <span className="block underline decoration-2 underline-offset-4">Create Your Pot</span>
-        </h1>
-        <p className={`text-lg ${muted}`}>Set up a rotating savings pot and invite the people you trust.</p>
-      </div>
+    <div className="max-w-2xl mx-auto text-cp-ink">
+      <h1 className="text-4xl md:text-5xl font-black mb-2">Start a circle</h1>
+      <p className="text-cp-muted mb-6">Save together with people you trust. Takes about a minute.</p>
 
-      {!address && (
-        <div className="mb-6 p-4 rounded-xl border-2 border-yellow-500/50 bg-yellow-500/10 text-sm font-medium">
-          Sign in to create a pot.
-        </div>
-      )}
+      <ol className="flex gap-2 mb-6" aria-label="Steps">
+        {STEPS.map((label, i) => (
+          <li key={label} className="flex-1">
+            <button
+              type="button"
+              onClick={() => i < step && setStep(i)}
+              disabled={i > step}
+              aria-current={i === step ? 'step' : undefined}
+              aria-label={`Step ${i + 1}: ${label}`}
+              className="w-full min-h-11 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent rounded-lg"
+            >
+              <span className={`block h-1.5 rounded-full ${i <= step ? 'bg-cp-ink' : 'bg-cp-line-soft'}`} />
+              <span className={`hidden sm:block text-xs font-bold mt-1 ${i === step ? 'text-cp-ink' : 'text-cp-muted'}`}>{label}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
 
-      {blocked && (
-        <div className="mb-6 p-4 rounded-xl border-2 border-red-500/50 bg-red-500/10 text-sm font-medium">
-          Your account can&apos;t create pots right now (reputation below the creation threshold or blacklisted).
-        </div>
-      )}
+      <Card className="p-6 sm:p-8">
+        {step === 0 && (
+          <div className="space-y-5">
+            <div>
+              <label htmlFor="circle-name" className="block text-lg font-bold mb-2">What should we call it?</label>
+              <input id="circle-name" className={field} value={name} maxLength={40} autoComplete="off" placeholder="Family savings, Office circle…" onChange={(e) => setName(e.target.value)} />
+              <p className="text-xs text-cp-muted mt-2">Members see this name.{account.mode === 'eoa' ? ' (Names are saved when you sign in with phone or email.)' : ''}</p>
+            </div>
+            <fieldset>
+              <legend className="text-sm font-bold mb-2">Pick an icon</legend>
+              <div className="flex flex-wrap gap-2">
+                {EMOJI.map((e) => (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => setEmoji(e)}
+                    aria-pressed={emoji === e}
+                    aria-label={`Icon ${e}`}
+                    className={`h-12 w-12 text-2xl rounded-2xl border-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent ${emoji === e ? 'border-cp-ink bg-cp-accent-soft' : 'border-cp-line-soft'}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        )}
 
-      <form onSubmit={handleSubmit} className={`p-8 rounded-2xl border-3 border-black transition-colors duration-300 ${isDarkMode ? ' text-white bg-white/5' : 'bg-white border-black text-black'}`}>
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-2">1. How is each round&apos;s receiver chosen?</h2>
-          <p className={`text-sm mb-6 ${muted}`}>You can&apos;t change this after the pot is created.</p>
-          <EngineSelector selected={engine} onSelect={setEngine} />
-        </div>
-
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-2">2. Who&apos;s in?</h2>
-          <p className={`text-sm mb-4 ${muted}`}>Only these addresses will be able to join. The pot starts once all of them have joined.</p>
-          <label className="flex items-center gap-2 mb-4 text-sm font-bold cursor-pointer">
-            <input type="checkbox" checked={includeMe} onChange={(e) => setIncludeMe(e.target.checked)} className="w-4 h-4" />
-            Include me as a member
-          </label>
-          <FormInput
-            label="Member wallet addresses"
-            hint="One per line, or separated by commas."
-            name="memberAddresses"
-            type="textarea"
-            placeholder={'0x123…\n0x456…'}
-            value={formData.memberAddresses}
-            onChange={handleChange}
-            error={errors.memberAddresses}
-            isDarkMode={isDarkMode}
-          />
-          <p className="text-sm mt-2 font-semibold">
-            {n} member{n === 1 ? '' : 's'}
-            {roster.duplicates.length > 0 && <span className={`font-normal ${muted}`}> · {roster.duplicates.length} duplicate{roster.duplicates.length === 1 ? '' : 's'} removed</span>}
-            {roster.invalid.length > 0 && <span className="font-normal text-red-500"> · {roster.invalid.length} invalid</span>}
-          </p>
-        </div>
-
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-6">3. Money and schedule</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormInput label="Each member pays per round (USDC)" hint="Minimum 1 USDC." name="amountPerCycle" type="number" placeholder="50" value={formData.amountPerCycle} onChange={handleChange} error={errors.amountPerCycle} isDarkMode={isDarkMode} />
-            <FormInput label="Round length (days)" hint="A new round can start this often." name="cycleDuration" type="number" placeholder="7" value={formData.cycleDuration} onChange={handleChange} error={errors.cycleDuration} isDarkMode={isDarkMode} />
-            <FormInput label="Time to pay (days from round start)" hint="At least 1 day. Members who don't pay in time are marked as missed." name="paymentWindow" type="number" placeholder="2" value={formData.paymentWindow} onChange={handleChange} error={errors.paymentWindow} isDarkMode={isDarkMode} />
-            {engine === 'auction' && (
-              <FormInput label="Bidding closes (days from round start)" hint="Bidding opens when payments close and must last at least 1 hour." name="biddingWindow" type="number" placeholder="3" value={formData.biddingWindow} onChange={handleChange} error={errors.biddingWindow} isDarkMode={isDarkMode} />
+        {step === 1 && (
+          <div className="space-y-6">
+            <div>
+              <label htmlFor="amount" className="block text-lg font-bold mb-2">How much does each person put in per round?</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-cp-muted" aria-hidden="true">$</span>
+                <input id="amount" className={`${field} pl-8`} inputMode="decimal" autoComplete="off" placeholder="50" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} aria-describedby="amount-hint" />
+              </div>
+              <p id="amount-hint" className="text-xs text-cp-muted mt-2">
+                US dollars (USDC){amountUnits > BigInt(0) ? ` · ${money(amountUnits)}` : ''} · minimum $1
+              </p>
+            </div>
+            <fieldset>
+              <legend className="text-lg font-bold mb-2">How often?</legend>
+              <div className="grid grid-cols-2 gap-2">
+                {(Object.keys(PRESETS) as PresetKey[]).map((k) => (
+                  <label key={k} className={`min-h-11 px-4 py-3 rounded-2xl border-2 cursor-pointer font-bold focus-within:ring-2 focus-within:ring-cp-accent ${preset === k ? 'border-cp-ink bg-cp-accent-soft' : 'border-cp-line-soft'}`}>
+                    <input type="radio" name="preset" value={k} checked={preset === k} onChange={() => setPreset(k)} className="sr-only" />
+                    {PRESETS[k].label}
+                    {k !== 'custom' && <span className="block text-xs font-normal text-cp-muted">{formatDuration(PRESETS[k].pay)} to pay each round</span>}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            {preset === 'custom' && (
+              <div className="grid sm:grid-cols-3 gap-3">
+                {([['every', 'Round length (days)'], ['pay', 'Days to pay'], ['bid', 'Bidding closes on day']] as const).map(([k, label]) => (
+                  <div key={k}>
+                    <label htmlFor={`custom-${k}`} className="block text-xs font-bold mb-1">{label}</label>
+                    <input id={`custom-${k}`} className={field} inputMode="decimal" value={custom[k]} onChange={(e) => setCustom({ ...custom, [k]: e.target.value })} />
+                  </div>
+                ))}
+              </div>
             )}
           </div>
-        </div>
+        )}
 
-        {summary && (
-          <div className={`mb-6 p-4 rounded-xl ${isDarkMode ? 'bg-white/10' : 'bg-purple-50'}`}>
-            <p className="text-sm font-bold mb-1">Summary</p>
-            <p className="text-sm">{summary} Money waiting to be paid out earns interest in Compound.</p>
+        {step === 2 && (
+          <div>
+            <h2 className="text-lg font-bold mb-1">How is each round&apos;s receiver chosen?</h2>
+            <p className="text-sm text-cp-muted mb-4">You can&apos;t change this later.</p>
+            <EngineSelector selected={engine} onSelect={setEngine} />
           </div>
         )}
 
-        {create.errorMessage && (
-          <div className="mb-4 p-4 rounded-lg bg-red-500/10 border-2 border-red-500/50">
-            <p className="text-sm font-bold text-red-500">{create.errorMessage}</p>
+        {step === 3 && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-bold mb-1">Who&apos;s in?</h2>
+              <p className="text-sm text-cp-muted">Only these accounts can join. The circle starts once everyone has joined.</p>
+            </div>
+            <label className="flex items-center gap-3 min-h-11 font-bold cursor-pointer">
+              <input type="checkbox" checked={includeMe} onChange={(e) => setIncludeMe(e.target.checked)} className="h-5 w-5" />
+              Include me
+            </label>
+            <div>
+              <label htmlFor="members" className="block text-sm font-bold mb-2">Members&apos; ChainPot account addresses</label>
+              <textarea id="members" rows={5} className={field} value={addresses} placeholder={'0x123…\n0x456…'} onChange={(e) => setAddresses(e.target.value)} aria-describedby="members-hint" />
+              <p id="members-hint" className="text-xs text-cp-muted mt-2">
+                One per line. Friends find theirs under their name → “Copy account address”. Inviting by phone number is coming soon.
+              </p>
+            </div>
+            <p className="text-sm font-bold" aria-live="polite">
+              {n} member{n === 1 ? '' : 's'}
+              {roster.duplicates.length > 0 && <span className="font-normal text-cp-muted"> · {roster.duplicates.length} duplicate{roster.duplicates.length === 1 ? '' : 's'} removed</span>}
+            </p>
           </div>
         )}
 
-        <div className="flex gap-4 pt-8 border-t border-white/10">
-          <button
-            type="submit"
-            disabled={!address || regLoading || blocked || create.isBusy || create.isConfirmed}
-            className={`flex-1 px-8 py-3 rounded-full font-bold text-lg transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'bg-white text-black' : 'bg-black text-white'}`}
-          >
-            {create.isPending ? 'Confirming…' : create.isConfirming ? 'Creating…' : create.isConfirmed ? 'Opening your pot…' : 'Create Pot'}
-          </button>
-          <Link href="/pots" className={`flex-1 px-8 py-3 rounded-full font-bold text-lg transition-all text-center border-3 ${isDarkMode ? 'border-white/30 text-white' : 'border-black text-black'}`}>Cancel</Link>
+        {step === 4 && (
+          <div className="space-y-5">
+            <h2 className="text-2xl font-black"><span aria-hidden="true">{emoji}</span> {name.trim()}</h2>
+            {summary && <p className="text-lg">{summary}</p>}
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div className="p-3 rounded-2xl bg-cp-surface-muted"><dt className="text-cp-muted">Each round</dt><dd className="font-bold">{exact(amountUnits)} × {n}</dd></div>
+              <div className="p-3 rounded-2xl bg-cp-surface-muted"><dt className="text-cp-muted">Time to pay</dt><dd className="font-bold">{formatDuration(schedule.pay || 0)}</dd></div>
+              <div className="p-3 rounded-2xl bg-cp-surface-muted"><dt className="text-cp-muted">Receiver</dt><dd className="font-bold">{engine === 'circle' ? 'Fair draw' : 'Lowest bid'}</dd></div>
+              <div className="p-3 rounded-2xl bg-cp-surface-muted"><dt className="text-cp-muted">Interest</dt><dd className="font-bold">Shared by members</dd></div>
+            </dl>
+            <p className="text-xs text-cp-muted">Money waiting to be paid out earns interest in Compound; 20% of that interest funds ChainPot&apos;s safety fund.</p>
+          </div>
+        )}
+
+        {(errors[step] || (step === 4 && firstInvalid !== undefined)) && (
+          <p role="alert" className="mt-4 text-sm font-bold text-cp-danger">{errors[step] ?? `Fix “${STEPS[firstInvalid!]}” first.`}</p>
+        )}
+        {create.errorMessage && <p role="alert" className="mt-4 text-sm font-bold text-cp-danger">{create.errorMessage}</p>}
+
+        <div className="flex items-center justify-between gap-3 mt-8">
+          {step > 0 ? (
+            <Button variant="ghost" onClick={() => setStep(step - 1)} disabled={create.isBusy}>
+              <ArrowLeft className="h-4 w-4" aria-hidden="true" /> Back
+            </Button>
+          ) : <span />}
+          {step < STEPS.length - 1 ? (
+            <Button onClick={() => !errors[step] && setStep(step + 1)} disabled={!!errors[step]}>Continue</Button>
+          ) : !account.isConnected ? (
+            <Button size="lg" onClick={account.login}>Sign in to create</Button>
+          ) : (
+            <Button size="lg" onClick={submit} disabled={regLoading || create.isBusy || create.isConfirmed || firstInvalid !== undefined || !!errors[4]}>
+              {create.isPending ? 'Confirming…' : create.isConfirming ? 'Creating…' : create.isConfirmed ? <><Check className="h-5 w-5" aria-hidden="true" /> Opening…</> : 'Create circle'}
+            </Button>
+          )}
         </div>
-      </form>
+      </Card>
     </div>
   );
 }

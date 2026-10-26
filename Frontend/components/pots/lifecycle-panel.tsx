@@ -20,7 +20,7 @@ interface LifecyclePanelProps {
  * "Next step" for the pot. Every action here is permissionless on-chain, so any connected user can
  * keep the pot moving — the pot no longer stalls if the creator disappears.
  */
-export function LifecyclePanel({ potId, engine, isDarkMode }: LifecyclePanelProps) {
+export function LifecyclePanel({ potId, engine }: LifecyclePanelProps) {
   const { address } = useChainPotAccount();
   const now = useNow();
   const { pot } = usePot(engine, potId);
@@ -52,7 +52,7 @@ export function LifecyclePanel({ potId, engine, isDarkMode }: LifecyclePanelProp
     retrySimulates: vrfRequestedAt === undefined ? retry.isSuccess : undefined,
   });
 
-  const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
+  const muted = 'text-cp-muted';
   let title = '';
   let detail: React.ReactNode = null;
   let button: { label: string; run: () => void } | null = null;
@@ -119,7 +119,7 @@ export function LifecyclePanel({ potId, engine, isDarkMode }: LifecyclePanelProp
   if (!title) return null;
 
   return (
-    <section className={`mb-8 p-6 rounded-2xl border-3 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
+    <section className={`mb-8 p-6 rounded-3xl border-3 border-cp-line bg-cp-surface text-cp-ink`}>
       <p className={`text-xs font-bold uppercase tracking-wide mb-1 ${muted}`}>Next step</p>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
@@ -131,7 +131,7 @@ export function LifecyclePanel({ potId, engine, isDarkMode }: LifecyclePanelProp
             <button
               onClick={button.run}
               disabled={!address || action.isBusy}
-              className={`px-6 py-3 rounded-full font-bold whitespace-nowrap disabled:opacity-50 ${isDarkMode ? 'bg-white text-black' : 'bg-black text-white'}`}
+              className={`px-6 py-3 rounded-full font-bold whitespace-nowrap disabled:opacity-50 bg-cp-ink text-cp-ink-inverse focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent focus-visible:ring-offset-2`}
             >
               {action.isPending ? 'Confirming…' : action.isConfirming ? 'Working…' : button.label}
             </button>
@@ -139,7 +139,7 @@ export function LifecyclePanel({ potId, engine, isDarkMode }: LifecyclePanelProp
           </div>
         )}
       </div>
-      {action.errorMessage && <p className="mt-3 text-sm font-medium text-red-500">{action.errorMessage}</p>}
+      {action.errorMessage && <p className="mt-3 text-sm font-medium text-cp-danger">{action.errorMessage}</p>}
     </section>
   );
 }

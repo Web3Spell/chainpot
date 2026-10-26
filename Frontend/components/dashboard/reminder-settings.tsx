@@ -53,7 +53,7 @@ export function ReminderSettings({ isDarkMode }: { isDarkMode: boolean }) {
 
   if (!enabled) return null;
 
-  const card = `border-3 border-black rounded-3xl p-6 ${isDarkMode ? 'bg-white/5 text-white' : 'bg-white text-black'}`;
+  const card = `border-3 border-cp-line rounded-3xl p-6 ${isDarkMode ? 'bg-white/5 text-white' : 'bg-white text-black'}`;
   const muted = isDarkMode ? 'text-white/60' : 'text-black/60';
 
   const save = async () => {
@@ -85,7 +85,7 @@ export function ReminderSettings({ isDarkMode }: { isDarkMode: boolean }) {
         <h2 className="text-2xl font-bold mb-1">Reminders</h2>
         <p className={`text-sm mb-5 ${muted}`}>Missing a payment deadline costs you your place in a pot. Let us remind you.</p>
         {profile.isLoading || !draft ? (
-          profile.isError ? <p className="text-sm text-red-500">{(profile.error as Error).message}</p> : <div className="h-24 animate-pulse bg-black/10 rounded-xl" />
+          profile.isError ? <p className="text-sm text-cp-danger">{(profile.error as Error).message}</p> : <div className="h-24 animate-pulse bg-black/10 rounded-xl" />
         ) : (
           <>
             <div className="grid md:grid-cols-2 gap-6">
@@ -114,10 +114,10 @@ export function ReminderSettings({ isDarkMode }: { isDarkMode: boolean }) {
               </fieldset>
             </div>
             <div className="flex items-center gap-4 mt-5">
-              <button onClick={save} disabled={saving} className={`px-6 py-3 rounded-full font-bold disabled:opacity-50 ${isDarkMode ? 'bg-white text-black' : 'bg-black text-white'}`}>
+              <button onClick={save} disabled={saving} className={`px-6 py-3 rounded-full font-bold disabled:opacity-50 bg-cp-ink text-cp-ink-inverse focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent focus-visible:ring-offset-2`}>
                 {saving ? 'Saving…' : 'Save reminders'}
               </button>
-              {message && <span className={`text-sm ${message.startsWith('Saved') ? 'text-green-600' : 'text-red-500'}`}>{message}</span>}
+              {message && <span className={`text-sm ${message.startsWith('Saved') ? 'text-cp-success' : 'text-cp-danger'}`}>{message}</span>}
             </div>
           </>
         )}

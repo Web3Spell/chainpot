@@ -1,19 +1,13 @@
 'use client';
 
 import { PotSummaryCard } from './pot-summary-card';
+import { Skeleton } from '@/components/ui/card';
 import { usePotCounter } from '@/hooks/useRoscaEngine';
 
 interface PotsGridProps {
   isDarkMode: boolean;
 }
 
-const SkeletonCard = ({ isDarkMode }: { isDarkMode: boolean }) => (
-  <div className={`p-6 rounded-2xl border-3 border-black animate-pulse ${isDarkMode ? 'bg-white/5' : 'bg-white/80'}`}>
-    <div className="h-6 w-2/3 bg-black/20 rounded mb-4" />
-    <div className="h-4 w-1/2 bg-black/10 rounded mb-6" />
-    <div className="h-10 w-full bg-black/10 rounded" />
-  </div>
-);
 
 export function PotsGrid({ isDarkMode }: PotsGridProps) {
   const { data: circleCountRaw, isLoading: circleLoading } = usePotCounter("circle");
@@ -29,7 +23,7 @@ export function PotsGrid({ isDarkMode }: PotsGridProps) {
     return (
       <section>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} isDarkMode={isDarkMode} />)}
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-48" />)}
         </div>
       </section>
     );

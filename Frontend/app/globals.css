@@ -40,7 +40,62 @@
   --sidebar-ring: oklch(0.5 0.2 280);
 }
 
+/* ChainPot brand tokens (see brand.md). Light is the default; .dark is set by ThemeProvider. */
+:root {
+  --cp-page: oklch(0.96 0.03 300);          /* soft lavender page */
+  --cp-surface: oklch(1 0 0 / 0.92);        /* cards */
+  --cp-surface-muted: oklch(0.97 0.02 300); /* inset panels */
+  --cp-ink: oklch(0.15 0 0);                /* primary text, bold borders, primary buttons */
+  --cp-ink-inverse: oklch(1 0 0);
+  --cp-muted: oklch(0.45 0.01 280);         /* secondary text: ≥4.5:1 on surface */
+  --cp-line: oklch(0.15 0 0);               /* signature thick card border */
+  --cp-line-soft: oklch(0.15 0 0 / 0.12);
+  --cp-accent: oklch(0.52 0.22 293);        /* ChainPot violet */
+  --cp-accent-soft: oklch(0.52 0.22 293 / 0.12);
+  --cp-success: oklch(0.52 0.15 150);
+  --cp-success-soft: oklch(0.52 0.15 150 / 0.12);
+  --cp-warn: oklch(0.55 0.14 70);
+  --cp-warn-soft: oklch(0.75 0.15 80 / 0.18);
+  --cp-danger: oklch(0.55 0.22 27);
+  --cp-danger-soft: oklch(0.55 0.22 27 / 0.1);
+}
+
+.dark {
+  --cp-page: oklch(0 0 0);
+  --cp-surface: oklch(1 0 0 / 0.05);
+  --cp-surface-muted: oklch(1 0 0 / 0.08);
+  --cp-ink: oklch(0.98 0 0);
+  --cp-ink-inverse: oklch(0.1 0 0);
+  --cp-muted: oklch(0.75 0.01 280);
+  --cp-line: oklch(1 0 0 / 0.25);
+  --cp-line-soft: oklch(1 0 0 / 0.12);
+  --cp-accent: oklch(0.72 0.16 293);
+  --cp-accent-soft: oklch(0.72 0.16 293 / 0.18);
+  --cp-success: oklch(0.75 0.15 150);
+  --cp-success-soft: oklch(0.75 0.15 150 / 0.15);
+  --cp-warn: oklch(0.82 0.14 85);
+  --cp-warn-soft: oklch(0.82 0.14 85 / 0.15);
+  --cp-danger: oklch(0.72 0.18 27);
+  --cp-danger-soft: oklch(0.72 0.18 27 / 0.15);
+}
+
 @theme inline {
+  --color-cp-page: var(--cp-page);
+  --color-cp-surface: var(--cp-surface);
+  --color-cp-surface-muted: var(--cp-surface-muted);
+  --color-cp-ink: var(--cp-ink);
+  --color-cp-ink-inverse: var(--cp-ink-inverse);
+  --color-cp-muted: var(--cp-muted);
+  --color-cp-line: var(--cp-line);
+  --color-cp-line-soft: var(--cp-line-soft);
+  --color-cp-accent: var(--cp-accent);
+  --color-cp-accent-soft: var(--cp-accent-soft);
+  --color-cp-success: var(--cp-success);
+  --color-cp-success-soft: var(--cp-success-soft);
+  --color-cp-warn: var(--cp-warn);
+  --color-cp-warn-soft: var(--cp-warn-soft);
+  --color-cp-danger: var(--cp-danger);
+  --color-cp-danger-soft: var(--cp-danger-soft);
   --font-sans: 'Geist', 'Geist Fallback';
   --font-mono: 'Geist Mono', 'Geist Mono Fallback';
   --color-background: var(--background);
@@ -107,4 +162,14 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.3);
+}
+
+/* Motion: everything decorative is opt-in for people who haven't asked for reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

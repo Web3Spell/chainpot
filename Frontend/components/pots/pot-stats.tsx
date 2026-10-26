@@ -17,18 +17,18 @@ export function PotStats({ potId, engine, isDarkMode }: PotStatsProps) {
   if (!pot) return null;
 
   const stats = [
-    { label: 'Each member pays', value: <><Money usdc={pot.amountPerCycle} /> / round</>, color: 'text-blue-500' },
-    { label: 'Pot per round', value: <Money usdc={pot.amountPerCycle * BigInt(pot.expectedMembers)} />, color: 'text-purple-500' },
-    { label: 'Schedule', value: config ? `Every ${formatDuration(config.cycleDuration)} · ${formatDuration(config.paymentWindow)} to pay` : '—', color: 'text-green-500' },
-    { label: 'Members', value: `${pot.memberCount} of ${pot.expectedMembers} joined`, color: 'text-orange-500' },
+    { label: 'Each member pays', value: <><Money usdc={pot.amountPerCycle} /> / round</>, color: 'text-cp-accent' },
+    { label: 'Pot per round', value: <Money usdc={pot.amountPerCycle * BigInt(pot.expectedMembers)} />, color: 'text-cp-accent' },
+    { label: 'Schedule', value: config ? `Every ${formatDuration(config.cycleDuration)} · ${formatDuration(config.paymentWindow)} to pay` : '—', color: 'text-cp-success' },
+    { label: 'Members', value: `${pot.memberCount} of ${pot.expectedMembers} joined`, color: 'text-cp-warn' },
   ];
 
   return (
     <section className="mb-8">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((stat) => (
-          <div key={stat.label} className={`p-6 rounded-xl border-3 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
-            <p className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{stat.label}</p>
+          <div key={stat.label} className={`p-6 rounded-xl border-3 border-cp-line bg-cp-surface text-cp-ink`}>
+            <p className={`text-sm font-medium mb-2 text-cp-muted`}>{stat.label}</p>
             <p className={`text-xl font-bold ${stat.color}`}>{stat.value}</p>
           </div>
         ))}

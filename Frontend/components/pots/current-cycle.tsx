@@ -23,7 +23,7 @@ const PHASE_LABEL = {
   completed: 'Completed',
 } as const;
 
-export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
+export function CurrentCycle({ potId, engine }: CurrentCycleProps) {
   const { address } = useChainPotAccount();
   const now = useNow(30_000);
   const { pot } = usePot(engine, potId);
@@ -33,10 +33,10 @@ export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
 
   if (!pot || idx === 0) return null;
   if (isLoading || !cycle) {
-    return <section className="mb-8"><div className={`h-40 rounded-2xl animate-pulse ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`} /></section>;
+    return <section className="mb-8"><div className={`h-40 rounded-2xl animate-pulse bg-cp-surface text-cp-ink`} /></section>;
   }
 
-  const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
+  const muted = 'text-cp-muted';
   const phase = cyclePhase(engine, cycle, now);
   const hasWinner = cycle.status === CycleStatus.Completed && cycle.winner !== ZERO_ADDRESS;
   // Auction winners receive their bid; VRF/no-bid winners receive the full collected amount (before interest).
@@ -58,8 +58,8 @@ export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
 
   return (
     <section className="mb-8">
-      <h2 className={`text-3xl font-bold mb-6 ${isDarkMode ? 'text-white' : 'text-black'}`}>Round {idx} of {pot.expectedMembers}</h2>
-      <div className={`p-8 rounded-2xl border-3 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
+      <h2 className={`text-3xl font-bold mb-6 text-cp-ink`}>Round {idx} of {pot.expectedMembers}</h2>
+      <div className={`p-8 rounded-3xl border-3 border-cp-line bg-cp-surface text-cp-ink`}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
           <div className="space-y-3">
             {rows.map(([k, v]) => (
@@ -72,7 +72,7 @@ export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
           <div className="space-y-3">
             <div className="flex justify-between gap-4">
               <span className={muted}>Receiver</span>
-              <span className="font-bold text-green-500">
+              <span className="font-bold text-cp-success">
                 {hasWinner ? (sameAddress(cycle.winner, address) ? 'You 🎉' : shortAddress(cycle.winner)) : cycle.status === CycleStatus.Completed ? 'No eligible receiver (refunded)' : 'Not picked yet'}
               </span>
             </div>
@@ -85,7 +85,7 @@ export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
             {engine === 'auction' && !hasWinner && (
               <div className="flex justify-between gap-4">
                 <span className={muted}>Lowest bid</span>
-                <span className="font-bold text-orange-500">{bids.hasLowest ? <><Money usdc={bids.lowestBid} /> by {sameAddress(bids.lowestBidder, address) ? 'you' : shortAddress(bids.lowestBidder)}</> : 'None yet'}</span>
+                <span className="font-bold text-cp-warn">{bids.hasLowest ? <><Money usdc={bids.lowestBid} /> by {sameAddress(bids.lowestBidder, address) ? 'you' : shortAddress(bids.lowestBidder)}</> : 'None yet'}</span>
               </div>
             )}
           </div>

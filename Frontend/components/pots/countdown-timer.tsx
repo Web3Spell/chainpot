@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 
-export function CountdownTimer({ deadline, label, isDarkMode }: { deadline: number; label: string; isDarkMode?: boolean }) {
+export function CountdownTimer({ deadline, label }: { deadline: number; label: string; isDarkMode?: boolean }) {
   const [timeLeft, setTimeLeft] = useState<string>('');
 
   useEffect(() => {
@@ -39,11 +39,11 @@ export function CountdownTimer({ deadline, label, isDarkMode }: { deadline: numb
 
   return (
     <div className="mt-3 flex items-center gap-2">
-      <span className={`text-sm font-bold ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{label}:</span>
+      <span className={`text-sm font-bold text-cp-muted`}>{label}:</span>
       <span className={`font-mono font-bold px-2 py-1 rounded ${
         timeLeft === 'Expired' 
-          ? 'bg-red-500/10 text-red-500' 
-          : 'bg-orange-500/10 text-orange-500'
+          ? 'bg-red-500/10 text-cp-danger' 
+          : 'bg-orange-500/10 text-cp-warn'
       }`}>
         ⏱️ {timeLeft}
       </span>

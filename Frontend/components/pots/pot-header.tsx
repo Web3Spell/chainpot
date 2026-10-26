@@ -8,7 +8,14 @@ import { engineContract, useMemberState, usePot } from '@/hooks/useRoscaEngine';
 import { registerMemberCall, useCanJoin, useIsRegistered } from '@/hooks/useMemberRegistry';
 import { contractCall, useContractAction } from '@/hooks/useContractAction';
 import { fetchInvite, inviteLink, inviteRoot, loadInvite, proofFor, publishInvite, readInviteFromHash, saveInvite } from '@/lib/invite';
-import { PotStatus, engineLabel, potHref, sameAddress, shortAddress, type Engine } from '@/lib/pot';
+import { PotStatus, engineLabel, formatDuration, potHref, sameAddress, shortAddress, type Engine } from '@/lib/pot';
+import { Share2 } from 'lucide-react';
+import { usePotConfig } from '@/hooks/useRoscaEngine';
+import { usePotNames } from '@/hooks/usePotNames';
+import { Money } from '@/components/money';
+import { Card } from '@/components/ui/card';
+import { Button, buttonClass } from '@/components/ui/button';
+import { StatusPill } from '@/components/ui/status-pill';
 
 interface PotHeaderProps {
   potId: bigint;
@@ -56,9 +63,12 @@ function useInviteList(engine: Engine, potId: bigint, merkleRoot?: `0x${string}`
   return { list, onServer: !!fromServer, loading: server.isLoading && !local };
 }
 
-export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
-  const { address } = useChainPotAccount();
+export function PotHeader({ potId, engine }: PotHeaderProps) {
+  const account = useChainPotAccount();
+  const { address } = account;
   const { pot } = usePot(engine, potId);
+  const { config } = usePotConfig(engine, potId);
+  const title = usePotNames([{ engine, potId }])(engine, potId);
   const member = useMemberState(engine, potId, pot?.currentCycle ?? 0, address);
   const { data: isRegistered } = useIsRegistered(address);
   const { data: canJoin } = useCanJoin(address);
@@ -85,7 +95,6 @@ export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
   const isFull = pot.memberCount >= pot.expectedMembers;
   const onList = !!address && !!inviteList?.some((a) => sameAddress(a, address));
   const proof = address && inviteList ? proofFor(inviteList, address) : undefined;
-  const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
 
   const statusText =
     pot.status === PotStatus.Open ? `Waiting for members (${pot.memberCount} of ${pot.expectedMembers} joined)`
@@ -111,19 +120,19 @@ export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
   // ---- Join call-to-action, in the order a new member hits each requirement ----
   let joinCta: React.ReactNode = null;
   if (isOpen && !member.isMember) {
-    const btn = `px-6 py-3 rounded-full font-bold transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`;
-    if (!address) joinCta = <p className={`text-sm font-medium ${muted}`}>Sign in to join.</p>;
-    else if (isFull) joinCta = <p className={`text-sm font-medium ${muted}`}>This pot is full.</p>;
-    else if (!inviteList) joinCta = <p className={`text-sm font-medium ${muted}`}>{inviteLoading ? 'Checking the invite list…' : 'Open the invite link the creator shared with you to join.'}</p>;
-    else if (!onList || !proof) joinCta = <p className="text-sm font-medium text-red-500">Your connected address isn&apos;t on this pot&apos;s invite list.</p>;
-    else if (isRegistered === true && canJoin === false) joinCta = <p className="text-sm font-medium text-red-500">Your account can&apos;t join pots right now (reputation too low or blacklisted).</p>;
+    const btn = buttonClass('primary', 'lg');
+    if (!address) joinCta = <button type="button" onClick={account.login} className={btn}>Sign in to join</button>;
+    else if (isFull) joinCta = <p className="text-sm font-medium text-cp-muted">This circle is full.</p>;
+    else if (!inviteList) joinCta = <p className="text-sm font-medium text-cp-muted">{inviteLoading ? 'Checking the invite list…' : 'Open the invite link the creator shared with you to join.'}</p>;
+    else if (!onList || !proof) joinCta = <p className="text-sm font-bold text-cp-danger">This account isn&apos;t on the invite list. Ask the person who invited you to add it.</p>;
+    else if (isRegistered === true && canJoin === false) joinCta = <p className="text-sm font-bold text-cp-danger">Your account can&apos;t join pots right now (reputation too low or blacklisted).</p>;
     else {
       // First-time users are registered in the same action (one sponsored operation with a smart account).
       const joinCall = contractCall({ ...contract, functionName: 'joinPot', args: [potId, proof] });
       const handleJoin = () => join.writeBatch(isRegistered === false ? [registerMemberCall(), joinCall] : [joinCall]);
       joinCta = (
         <button onClick={handleJoin} disabled={join.isBusy || isRegistered === undefined} className={btn}>
-          {join.isPending ? 'Confirming…' : join.isConfirming ? 'Joining…' : 'Join Pot'}
+          {join.isPending ? 'Confirming…' : join.isConfirming ? 'Joining…' : 'Join the circle'}
         </button>
       );
     }
@@ -131,60 +140,83 @@ export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
 
   const errorMessage = join.errorMessage ?? leave.errorMessage ?? start.errorMessage;
 
+  const invited = isOpen && !member.isMember;
+  const cadence = config ? `every ${formatDuration(config.cycleDuration)}` : '';
+  const share = async () => {
+    if (!shareUrl) return;
+    const text = `Join my ChainPot circle "${title.name}"`;
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: text, text, url: shareUrl });
+        return;
+      } catch {
+        // cancelled or unsupported target — fall back to copying
+      }
+    }
+    await copyLink();
+  };
+
   return (
-    <section className="mb-8">
-      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 mb-6">
+    <section className="mb-8 text-cp-ink" id="invite">
+      <Link href="/dashboard" className="inline-flex items-center min-h-11 text-sm font-bold text-cp-muted hover:text-cp-ink rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent">
+        ← My circles
+      </Link>
+      <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-4 mt-2 mb-6">
         <div>
-          <Link href="/pots" className={`text-sm font-bold mb-4 inline-block transition-opacity ${isDarkMode ? 'text-white/60 hover:text-white' : 'text-black/60 hover:text-black'}`}>← Back to Pots</Link>
-          <h1 className="text-5xl font-black mb-2">Pot #{potId.toString()}</h1>
-          <p className={`text-lg ${muted}`}>
-            {engine === 'circle' ? '🎲' : '🏦'} {engineLabel(engine)} · Created by {isCreator ? 'you' : shortAddress(pot.creator)}
+          <h1 className="text-4xl md:text-5xl font-black"><span aria-hidden="true">{title.emoji}</span> {title.name}</h1>
+          <p className="text-cp-muted mt-1">
+            {title.custom ? `${engineLabel(engine)} #${potId} · ` : ''}Started by {isCreator ? 'you' : shortAddress(pot.creator)}
           </p>
         </div>
-
         <div className="flex gap-3 flex-wrap items-center">
-          {joinCta}
-
+          {!invited && joinCta}
           {isOpen && member.isMember && !isCreator && (
-            <button onClick={handleLeave} disabled={leave.isBusy} className={`px-6 py-3 rounded-full font-bold border-3 disabled:opacity-50 ${isDarkMode ? 'border-white/30 text-white' : 'border-black text-black'}`}>
-              {leave.isBusy ? 'Leaving…' : 'Leave Pot'}
-            </button>
+            <Button variant="secondary" onClick={handleLeave} disabled={leave.isBusy}>{leave.isBusy ? 'Leaving…' : 'Leave'}</Button>
           )}
-
           {isCreator && isOpen && (
-            <button
+            <Button
               onClick={() => start.write({ ...contract, functionName: 'startPot', args: [potId] })}
               disabled={!isFull || start.isBusy}
               title={isFull ? undefined : 'Everyone on the invite list must join first'}
-              className={`px-6 py-3 rounded-full font-bold border-3 transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'border-white/30 text-white hover:bg-white/10' : 'border-black text-black hover:bg-black/10'}`}
             >
-              {start.isPending ? 'Confirming…' : start.isConfirming ? 'Starting…' : isFull ? 'Start Pot' : `Start Pot (${pot.memberCount}/${pot.expectedMembers} joined)`}
-            </button>
+              {start.isPending ? 'Confirming…' : start.isConfirming ? 'Starting…' : isFull ? 'Start the circle' : `Start (${pot.memberCount}/${pot.expectedMembers} joined)`}
+            </Button>
           )}
         </div>
       </div>
 
-      {errorMessage && <p className="mb-4 text-sm font-medium text-red-500">{errorMessage}</p>}
+      {invited && (
+        <Card className="p-6 mb-6 border-cp-accent">
+          <p className="text-sm font-bold text-cp-accent">You&apos;re invited</p>
+          <p className="text-xl font-bold mt-1">
+            {pot.expectedMembers} people each put in <Money usdc={pot.amountPerCycle} /> {cadence}. Each round one person receives <Money usdc={pot.amountPerCycle * BigInt(pot.expectedMembers)} />
+            {engine === 'auction' ? ' — or less, if they bid to get it early' : ', picked by a fair draw'}.
+          </p>
+          <p className="text-sm text-cp-muted mt-2">You&apos;ll pay every round until everyone has received once. Missing a payment means losing your place.</p>
+          <div className="mt-4 flex flex-wrap items-center gap-3">{joinCta}</div>
+        </Card>
+      )}
 
-      <div className={`p-4 rounded-xl border-2 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`}>
-        <div className="flex items-center justify-between flex-wrap gap-4">
-          <div className="flex items-center gap-2">
-            <span className={`w-3 h-3 rounded-full ${pot.status === PotStatus.Active ? 'bg-green-500' : pot.status === PotStatus.Open ? 'bg-yellow-500' : 'bg-gray-400'}`} />
-            <span className="font-bold">{statusText}</span>
-            {member.isMember && <span className="ml-2 text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-600 font-bold">You&apos;re a member</span>}
+      {errorMessage && <p role="alert" className="mb-4 text-sm font-bold text-cp-danger">{errorMessage}</p>}
+
+      <Card className="p-4">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <StatusPill tone={pot.status === PotStatus.Active ? 'success' : pot.status === PotStatus.Open ? 'warn' : 'neutral'}>{statusText}</StatusPill>
+            {member.isMember && <StatusPill tone="accent">You&apos;re a member</StatusPill>}
           </div>
-          {isOpen && shareUrl && (
-            <button onClick={copyLink} className="text-sm font-bold underline">
-              {copied ? 'Invite link copied ✓' : 'Copy invite link'}
-            </button>
+          {isOpen && shareUrl && member.isMember && (
+            <Button variant="secondary" onClick={share}>
+              <Share2 className="h-4 w-4" aria-hidden="true" /> {copied ? 'Link copied ✓' : 'Invite people'}
+            </Button>
           )}
         </div>
         {isOpen && isCreator && !shareUrl && (
-          <p className={`mt-3 text-xs ${muted}`}>
-            The invite list for this pot isn&apos;t saved in this browser, so the invite link can&apos;t be generated here. Open the pot from the browser you created it in.
+          <p className="mt-3 text-xs text-cp-muted">
+            The invite list isn&apos;t available on this device yet, so the invite link can&apos;t be made here. Open the circle on the device you created it on.
           </p>
         )}
-      </div>
+      </Card>
     </section>
   );
 }

@@ -57,8 +57,11 @@ export function guessCountry(languages: readonly string[]): Country | undefined 
   return undefined;
 }
 
-/** Format USDC base units as an exact dollar string. */
-export function formatUsd(usdc: bigint, locale?: string) {
+/**
+ * Format USDC base units as an exact dollar string. Always en-US ("$50.00"): identical on server and
+ * client (no hydration mismatch) and unambiguous next to a local-currency estimate.
+ */
+export function formatUsd(usdc: bigint, locale = "en-US") {
   return new Intl.NumberFormat(locale, { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(Number(usdc) / 1e6);
 }
 

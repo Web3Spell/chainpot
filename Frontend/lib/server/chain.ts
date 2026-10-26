@@ -115,3 +115,9 @@ export async function readMandateRoundState(engine: Engine, potId: bigint, membe
 }
 
 export { client as serverPublicClient };
+
+/** On-chain creator of a pot, or undefined if it doesn't exist. */
+export async function readPotCreator(engine: Engine, potId: bigint) {
+  const pot = parsePot(await client.readContract({ ...engineAt(engine), functionName: "getPot", args: [potId] }));
+  return pot?.creator;
+}

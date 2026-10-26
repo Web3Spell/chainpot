@@ -17,3 +17,12 @@ export function Money({ usdc, className }: { usdc: bigint; className?: string })
     </span>
   );
 }
+
+/** String form of <Money> for sentences: "≈ ₹4,180" (local) or "$50.00" (USD users). */
+export function useMoney() {
+  const { currency, rate } = useCurrency();
+  return (usdc: bigint) => {
+    const local = formatLocal(usdc, currency, rate);
+    return local ? `≈ ${local}` : formatUsd(usdc);
+  };
+}

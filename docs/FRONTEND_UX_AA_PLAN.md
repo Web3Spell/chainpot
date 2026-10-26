@@ -276,6 +276,12 @@ creator's account) and is not built yet.
 3. **Reminders**: invite, round started, due in 48h / 24h / 2h, bidding open, you received, missed.
 
 ### Phase 4 — UX redesign (≈2–3 weeks, overlaps Phase 2/3)
+_Status 2026-10-26: first pass built on branch `phase-4-ux-redesign`: brand tokens (`brand.md`,
+`cp-*` Tailwind colours, light + dark), UI primitives, Home ("Your circles": one status line + one
+button per circle, balance card), 5-step create wizard with frequency presets, creator-set circle
+names (`pot_meta`, migration 0004), circle page (invite hero, rounds timeline, members with
+paid/received/missed, bid slider, "Details & verify on-chain"), honest Explore page with live stats,
+mobile navigation. Not yet: Hindi/i18n, phone-number invites (needs draft circles), on-ramp._
 Screens (mobile-first):
 
 - **Home**: list of "My circles" each with a single status line + one button

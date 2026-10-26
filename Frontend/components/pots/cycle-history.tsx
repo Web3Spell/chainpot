@@ -13,10 +13,10 @@ interface CycleHistoryProps {
 }
 
 
-function CycleItem({ engine, potId, cycleNum, isDarkMode, indexed }: { engine: Engine; potId: bigint; cycleNum: number; isDarkMode: boolean; indexed?: IndexedCycle }) {
+function CycleItem({ engine, potId, cycleNum, indexed }: { engine: Engine; potId: bigint; cycleNum: number; indexed?: IndexedCycle }) {
   const { address } = useChainPotAccount();
   const { cycle } = useCycle(engine, potId, cycleNum);
-  const box = `p-6 rounded-xl border-3 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`;
+  const box = `p-6 rounded-xl border-3 border-cp-line bg-cp-surface text-cp-ink`;
   if (!cycle) return <div className={`${box} animate-pulse`}><div className="h-10 bg-black/10 rounded" /></div>;
 
   const noWinner = cycle.winner === ZERO_ADDRESS;
@@ -31,11 +31,11 @@ function CycleItem({ engine, potId, cycleNum, isDarkMode, indexed }: { engine: E
           <p className="text-sm font-medium text-gray-500">Receiver</p>
           <p className="font-bold">{noWinner ? 'None (refunded)' : sameAddress(cycle.winner, address) ? 'You' : shortAddress(cycle.winner)}</p>
           {indexed?.winnerAmount && <p className="text-xs text-gray-500">Received <Money usdc={BigInt(indexed.winnerAmount)} />{indexed.fallbackWinner ? ' · fallback draw' : ''}</p>}
-          {!!indexed?.defaultsCount && <p className="text-xs text-red-500">{indexed.defaultsCount} missed payment{indexed.defaultsCount === 1 ? '' : 's'}</p>}
+          {!!indexed?.defaultsCount && <p className="text-xs text-cp-danger">{indexed.defaultsCount} missed payment{indexed.defaultsCount === 1 ? '' : 's'}</p>}
         </div>
         <div>
           <p className="text-sm font-medium text-gray-500">Collected</p>
-          <p className="text-lg font-bold text-green-500"><Money usdc={cycle.totalCollected} /> · {cycle.paidCount} paid</p>
+          <p className="text-lg font-bold text-cp-success"><Money usdc={cycle.totalCollected} /> · {cycle.paidCount} paid</p>
         </div>
         <div className="md:text-right">
           <p className="text-sm font-medium text-gray-500">Started {formatDateTime(cycle.startTime)}</p>
@@ -45,7 +45,7 @@ function CycleItem({ engine, potId, cycleNum, isDarkMode, indexed }: { engine: E
   );
 }
 
-export function CycleHistory({ potId, engine, isDarkMode }: CycleHistoryProps) {
+export function CycleHistory({ potId, engine }: CycleHistoryProps) {
   const { pot } = usePot(engine, potId);
   const { data: index } = usePotIndex(engine, potId);
   if (!pot) return null;
@@ -55,12 +55,12 @@ export function CycleHistory({ potId, engine, isDarkMode }: CycleHistoryProps) {
 
   return (
     <section>
-      <h2 className={`text-3xl font-bold mb-6 ${isDarkMode ? 'text-white' : 'text-black'}`}>Past rounds</h2>
+      <h2 className={`text-3xl font-bold mb-6 text-cp-ink`}>Past rounds</h2>
       {rounds.length === 0 ? (
         <p className="text-gray-500">No completed rounds yet.</p>
       ) : (
         <div className="space-y-4">
-          {rounds.map((n) => <CycleItem key={n} engine={engine} potId={potId} cycleNum={n} isDarkMode={isDarkMode} indexed={index?.cycles.find((c) => c.cycleId === n)} />)}
+          {rounds.map((n) => <CycleItem key={n} engine={engine} potId={potId} cycleNum={n} indexed={index?.cycles.find((c) => c.cycleId === n)} />)}
         </div>
       )}
     </section>

@@ -74,13 +74,13 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
         timestamp: Math.floor(e.timestamp),
       }));
 
-  const card = `border-3 border-black rounded-3xl p-6 backdrop-blur transition-colors ${isDarkMode ? 'text-white bg-white/5' : 'bg-white border-black text-black'}`;
+  const card = `border-3 border-cp-line rounded-3xl p-6 backdrop-blur transition-colors ${isDarkMode ? 'text-white bg-white/5' : 'bg-white border-black text-black'}`;
 
   return (
     <section className="py-12 space-y-6 pb-16">
       <div className="space-y-2">
-        <h2 className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>My Activity</h2>
-        <p className={isDarkMode ? 'text-white/60' : 'text-black/60'}>
+        <h2 className={`text-3xl font-bold text-cp-ink`}>My Activity</h2>
+        <p className="text-cp-muted">
           {indexed.data ? 'Everything that happened in your pots.' : 'Your activity since you opened this page.'}
         </p>
       </div>
@@ -99,7 +99,7 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
                 <div>
                   <p className="font-bold text-sm">
                     {r.label}
-                    {r.amount !== undefined && <span className="ml-2 text-green-600"><Money usdc={r.amount} /></span>}
+                    {r.amount !== undefined && <span className="ml-2 text-cp-success"><Money usdc={r.amount} /></span>}
                   </p>
                   <p className="text-xs text-gray-500">
                     {formatDateTime(r.timestamp)}

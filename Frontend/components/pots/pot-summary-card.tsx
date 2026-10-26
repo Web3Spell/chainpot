@@ -38,14 +38,14 @@ export function PotSummaryCard({ potId, engine, isDarkMode, membersOnly }: PotSu
   if (membersOnly && !isMember) return null;
   if (isLoading || !pot) {
     return membersOnly ? null : (
-      <div className={`p-6 rounded-2xl border-3 border-black animate-pulse ${isDarkMode ? 'bg-white/5' : 'bg-white/80'}`}>
+      <div className={`p-6 rounded-3xl border-3 border-cp-line animate-pulse bg-cp-surface text-cp-ink`}>
         <div className="h-6 w-2/3 bg-black/20 rounded mb-4" />
         <div className="h-10 w-full bg-black/10 rounded" />
       </div>
     );
   }
 
-  const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
+  const muted = 'text-cp-muted';
   const progress =
     pot.status === PotStatus.Open ? `${pot.memberCount} of ${pot.expectedMembers} joined`
     : pot.status === PotStatus.Active ? `Round ${pot.currentCycle} of ${pot.expectedMembers}`
@@ -53,16 +53,16 @@ export function PotSummaryCard({ potId, engine, isDarkMode, membersOnly }: PotSu
 
   return (
     <Link href={potHref(engine, potId)} className="block">
-      <div className={`p-6 rounded-2xl border-3 border-black transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 h-full ${isDarkMode ? 'bg-white/5 text-white' : 'bg-white/90 text-black'}`}>
+      <div className={`p-6 rounded-3xl border-3 border-cp-line transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 h-full ${isDarkMode ? 'bg-white/5 text-white' : 'bg-white/90 text-black'}`}>
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
             <h3 className="text-xl font-bold">{engine === 'circle' ? '🎲' : '🏦'} Pot #{String(potId)}</h3>
             <p className={`text-sm ${muted}`}>{engineLabel(engine)} · by {sameAddress(pot.creator, address) ? 'you' : shortAddress(pot.creator)}</p>
           </div>
           <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${
-            pot.status === PotStatus.Active ? 'bg-green-500/20 text-green-600'
-            : pot.status === PotStatus.Open ? 'bg-yellow-500/20 text-yellow-700'
-            : 'bg-gray-500/20 text-gray-500'}`}>
+            pot.status === PotStatus.Active ? 'bg-cp-success-soft text-cp-success'
+            : pot.status === PotStatus.Open ? 'bg-cp-warn-soft text-cp-warn'
+            : 'bg-cp-line-soft text-cp-muted'}`}>
             {STATUS[pot.status]}
           </span>
         </div>
@@ -72,7 +72,7 @@ export function PotSummaryCard({ potId, engine, isDarkMode, membersOnly }: PotSu
           <div><p className={muted}>Every</p><p className="font-bold">{config ? formatDuration(config.cycleDuration) : '—'}</p></div>
           <div><p className={muted}>Progress</p><p className="font-bold">{progress}</p></div>
         </div>
-        {isMember && <p className="text-xs font-bold text-green-600">You&apos;re a member</p>}
+        {isMember && <p className="text-xs font-bold text-cp-success">You&apos;re a member</p>}
       </div>
     </Link>
   );
