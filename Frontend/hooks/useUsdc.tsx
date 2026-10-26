@@ -1,11 +1,12 @@
 'use client';
 
-import { useAccount, useReadContract } from 'wagmi';
-import { useContractAction } from './useContractAction';
+import { useChainPotAccount } from '@/lib/aa/account';
+import { useReadContract } from 'wagmi';
+import { contractCall, useContractAction } from './useContractAction';
 import { CONTRACT_CONFIG } from '../config/hooksConf';
 
 // Minimal ERC-20 ABI slices we need
-const USDC_ABI = [
+export const USDC_ABI = [
   {
     name: 'approve',
     type: 'function',
@@ -46,7 +47,7 @@ export function useUSDCAllowance(
   owner?: `0x${string}` | null,
   spender?: `0x${string}` | null
 ) {
-  const { address: connected } = useAccount();
+  const { address: connected } = useChainPotAccount();
   const token = CONTRACT_CONFIG.addresses.usdc as `0x${string}`;
   const spend = spender ?? (CONTRACT_CONFIG.addresses.vault as `0x${string}`);
   const ownerAddress = owner ?? connected ?? '';
@@ -110,4 +111,9 @@ export function useUSDCApprove(spender?: `0x${string}` | null) {
       args: [spend, amount],
     });
   return { ...action, approve };
+}
+
+/** Exact-amount USDC approval to the Vault, for batching in front of a payment. */
+export function usdcApproveCall(amount: bigint, spender: `0x${string}` = CONTRACT_CONFIG.addresses.vault as `0x${string}`) {
+  return contractCall({ address: CONTRACT_CONFIG.addresses.usdc as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [spender, amount] });
 }

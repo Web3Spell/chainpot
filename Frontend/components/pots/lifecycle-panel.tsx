@@ -1,6 +1,7 @@
 'use client';
 
-import { useAccount, useSimulateContract } from 'wagmi';
+import { useChainPotAccount } from '@/lib/aa/account';
+import { useSimulateContract } from 'wagmi';
 import { engineContract, useCycle, useDrawReady, useMemberState, usePot, usePotConfig } from '@/hooks/useRoscaEngine';
 import { auctionContract, circleContract } from '@/hooks/useAuctionEngine';
 import { useContractAction } from '@/hooks/useContractAction';
@@ -20,7 +21,7 @@ interface LifecyclePanelProps {
  * keep the pot moving — the pot no longer stalls if the creator disappears.
  */
 export function LifecyclePanel({ potId, engine, isDarkMode }: LifecyclePanelProps) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const now = useNow();
   const { pot } = usePot(engine, potId);
   const { config } = usePotConfig(engine, potId);
@@ -132,7 +133,7 @@ export function LifecyclePanel({ potId, engine, isDarkMode }: LifecyclePanelProp
               disabled={!address || action.isBusy}
               className={`px-6 py-3 rounded-full font-bold whitespace-nowrap disabled:opacity-50 ${isDarkMode ? 'bg-white text-black' : 'bg-black text-white'}`}
             >
-              {action.isPending ? 'Confirm in wallet…' : action.isConfirming ? 'Working…' : button.label}
+              {action.isPending ? 'Confirming…' : action.isConfirming ? 'Working…' : button.label}
             </button>
             <span className={`text-xs ${muted}`}>{address ? 'Anyone can do this step.' : 'Connect a wallet to do this step.'}</span>
           </div>

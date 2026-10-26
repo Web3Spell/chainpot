@@ -1,4 +1,29 @@
-import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError } from "viem";
+import { BaseError, ContractFunctionRevertedError, UserRejectedRequestError, decodeErrorResult, type Abi } from "viem";
+import { CONTRACT_CONFIG } from "@/config/hooksConf";
+
+const ALL_ABIS: Abi[] = [
+  CONTRACT_CONFIG.abis.circleEngine,
+  CONTRACT_CONFIG.abis.auctionEngine,
+  CONTRACT_CONFIG.abis.vault,
+  CONTRACT_CONFIG.abis.memberRegistry,
+] as unknown as Abi[];
+
+/**
+ * Smart-account sends fail inside the bundler/paymaster, where viem can't attach our ABI. Pull any
+ * revert selector out of the message and decode it against ChainPot's ABIs.
+ */
+function decodeEmbeddedRevert(text: string): string | undefined {
+  for (const m of text.matchAll(/0x[0-9a-fA-F]{8,}/g)) {
+    for (const abi of ALL_ABIS) {
+      try {
+        return decodeErrorResult({ abi, data: m[0] as `0x${string}` }).errorName;
+      } catch {
+        // not this ABI / not an error payload
+      }
+    }
+  }
+  return undefined;
+}
 
 // Plain-language messages for the V4 custom errors (and the common USDC reverts).
 const MESSAGES: Record<string, string> = {
@@ -50,6 +75,10 @@ const REASON_HINTS: [RegExp, string][] = [
 /** Turn any wagmi/viem write error into a short, human sentence. */
 export function friendlyError(error: unknown): string | undefined {
   if (!error) return undefined;
+  const raw = error instanceof Error ? `${error.message} ${(error as { details?: string }).details ?? ""}` : String(error);
+  if (/user (rejected|denied|cancel)|cancelled by user|mfa.*(cancel|abort)/i.test(raw)) return "You cancelled the request.";
+  const embedded = decodeEmbeddedRevert(raw);
+  if (embedded && MESSAGES[embedded]) return MESSAGES[embedded];
   if (error instanceof BaseError) {
     if (error.walk((e) => e instanceof UserRejectedRequestError)) return "You cancelled the request in your wallet.";
     const reverted = error.walk((e) => e instanceof ContractFunctionRevertedError);

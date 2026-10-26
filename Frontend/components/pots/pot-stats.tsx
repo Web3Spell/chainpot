@@ -1,6 +1,6 @@
 'use client';
 
-import { formatUnits } from 'viem';
+import { Money } from '@/components/money';
 import { usePot, usePotConfig } from '@/hooks/useRoscaEngine';
 import { formatDuration, type Engine } from '@/lib/pot';
 
@@ -10,7 +10,6 @@ interface PotStatsProps {
   isDarkMode: boolean;
 }
 
-const usd = (v: bigint) => `$${Number(formatUnits(v, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 export function PotStats({ potId, engine, isDarkMode }: PotStatsProps) {
   const { pot } = usePot(engine, potId);
@@ -18,8 +17,8 @@ export function PotStats({ potId, engine, isDarkMode }: PotStatsProps) {
   if (!pot) return null;
 
   const stats = [
-    { label: 'Each member pays', value: `${usd(pot.amountPerCycle)} / round`, color: 'text-blue-500' },
-    { label: 'Pot per round', value: usd(pot.amountPerCycle * BigInt(pot.expectedMembers)), color: 'text-purple-500' },
+    { label: 'Each member pays', value: <><Money usdc={pot.amountPerCycle} /> / round</>, color: 'text-blue-500' },
+    { label: 'Pot per round', value: <Money usdc={pot.amountPerCycle * BigInt(pot.expectedMembers)} />, color: 'text-purple-500' },
     { label: 'Schedule', value: config ? `Every ${formatDuration(config.cycleDuration)} · ${formatDuration(config.paymentWindow)} to pay` : '—', color: 'text-green-500' },
     { label: 'Members', value: `${pot.memberCount} of ${pot.expectedMembers} joined`, color: 'text-orange-500' },
   ];

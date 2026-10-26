@@ -2,18 +2,24 @@ import { http } from 'wagmi';
 import { baseSepolia } from 'wagmi/chains';
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 
-// WalletConnect project ID (https://cloud.reown.com). The fallback is a shared dev ID; set your own in .env.local.
-const projectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID || '807833e6518d26bfea04b61e377c1d78';
+/** When set, users sign in with Privy (email/phone/social/passkey) and act through a smart wallet. */
+export const PRIVY_APP_ID = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
 
 // Prefer a dedicated RPC (e.g. CDP Node) in production; the public endpoint is rate limited.
 const rpcUrl = process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL || 'https://base-sepolia-rpc.publicnode.com';
+const transports = { [baseSepolia.id]: http(rpcUrl) };
 
-export const config = getDefaultConfig({
-  appName: 'ChainPot',
-  projectId,
-  chains: [baseSepolia],
-  ssr: true,
-  transports: {
-    [baseSepolia.id]: http(rpcUrl),
-  },
-});
+// WalletConnect project ID (https://cloud.reown.com). The fallback is a shared dev ID; set your own in .env.local.
+const projectId = process.env.NEXT_PUBLIC_WC_PROJECT_ID || '807833e6518d26bfea04b61e377c1d78';
+
+export { transports };
+
+let rainbowConfig: ReturnType<typeof getDefaultConfig> | undefined;
+
+/**
+ * Own-wallet mode (RainbowKit). Created lazily so Privy mode — which builds its own config in
+ * providers/PrivyProviders — never starts a second WalletConnect client.
+ */
+export function getRainbowConfig() {
+  return (rainbowConfig ??= getDefaultConfig({ appName: 'ChainPot', projectId, chains: [baseSepolia], ssr: true, transports }));
+}

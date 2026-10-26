@@ -1,7 +1,7 @@
 'use client';
 
-import { useAccount } from 'wagmi';
-import { formatUnits } from 'viem';
+import { Money } from '@/components/money';
+import { useChainPotAccount } from '@/lib/aa/account';
 import { useCycle, usePot } from '@/hooks/useRoscaEngine';
 import { usePotIndex, type IndexedCycle } from '@/hooks/useIndexer';
 import { ZERO_ADDRESS, formatDateTime, sameAddress, shortAddress, type Engine } from '@/lib/pot';
@@ -12,10 +12,9 @@ interface CycleHistoryProps {
   isDarkMode: boolean;
 }
 
-const usd = (v: bigint) => `$${Number(formatUnits(v, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 function CycleItem({ engine, potId, cycleNum, isDarkMode, indexed }: { engine: Engine; potId: bigint; cycleNum: number; isDarkMode: boolean; indexed?: IndexedCycle }) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const { cycle } = useCycle(engine, potId, cycleNum);
   const box = `p-6 rounded-xl border-3 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`;
   if (!cycle) return <div className={`${box} animate-pulse`}><div className="h-10 bg-black/10 rounded" /></div>;
@@ -31,12 +30,12 @@ function CycleItem({ engine, potId, cycleNum, isDarkMode, indexed }: { engine: E
         <div>
           <p className="text-sm font-medium text-gray-500">Receiver</p>
           <p className="font-bold">{noWinner ? 'None (refunded)' : sameAddress(cycle.winner, address) ? 'You' : shortAddress(cycle.winner)}</p>
-          {indexed?.winnerAmount && <p className="text-xs text-gray-500">Received {usd(BigInt(indexed.winnerAmount))}{indexed.fallbackWinner ? ' · fallback draw' : ''}</p>}
+          {indexed?.winnerAmount && <p className="text-xs text-gray-500">Received <Money usdc={BigInt(indexed.winnerAmount)} />{indexed.fallbackWinner ? ' · fallback draw' : ''}</p>}
           {!!indexed?.defaultsCount && <p className="text-xs text-red-500">{indexed.defaultsCount} missed payment{indexed.defaultsCount === 1 ? '' : 's'}</p>}
         </div>
         <div>
           <p className="text-sm font-medium text-gray-500">Collected</p>
-          <p className="text-lg font-bold text-green-500">{usd(cycle.totalCollected)} · {cycle.paidCount} paid</p>
+          <p className="text-lg font-bold text-green-500"><Money usdc={cycle.totalCollected} /> · {cycle.paidCount} paid</p>
         </div>
         <div className="md:text-right">
           <p className="text-sm font-medium text-gray-500">Started {formatDateTime(cycle.startTime)}</p>

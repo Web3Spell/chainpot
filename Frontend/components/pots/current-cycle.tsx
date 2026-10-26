@@ -1,7 +1,7 @@
 'use client';
 
-import { useAccount } from 'wagmi';
-import { formatUnits } from 'viem';
+import { Money } from '@/components/money';
+import { useChainPotAccount } from '@/lib/aa/account';
 import { useCycle, usePot } from '@/hooks/useRoscaEngine';
 import { useAuctionBids } from '@/hooks/useAuctionEngine';
 import { useNow } from '@/hooks/useNow';
@@ -13,7 +13,6 @@ interface CurrentCycleProps {
   isDarkMode: boolean;
 }
 
-const usd = (v: bigint) => `$${Number(formatUnits(v, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 const PHASE_LABEL = {
   none: 'Not started',
@@ -25,7 +24,7 @@ const PHASE_LABEL = {
 } as const;
 
 export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const now = useNow(30_000);
   const { pot } = usePot(engine, potId);
   const idx = pot?.currentCycle ?? 0;
@@ -54,7 +53,7 @@ export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
     ['Started', formatDateTime(cycle.startTime)],
     ['Payments close', formatDateTime(cycle.paymentDeadline)],
     ...(engine === 'auction' ? [['Bidding closes', formatDateTime(cycle.biddingDeadline)] as [string, React.ReactNode]] : []),
-    ['Paid so far', `${cycle.paidCount} of ${pot.memberCount} · ${usd(cycle.totalCollected)}`],
+    ['Paid so far', <>{cycle.paidCount} of {pot.memberCount} · <Money usdc={cycle.totalCollected} /></>],
   ];
 
   return (
@@ -80,13 +79,13 @@ export function CurrentCycle({ potId, engine, isDarkMode }: CurrentCycleProps) {
             {hasWinner && (
               <div className="flex justify-between gap-4">
                 <span className={muted}>Payout (before interest)</span>
-                <span className="font-bold">{usd(payout)}</span>
+                <span className="font-bold"><Money usdc={payout} /></span>
               </div>
             )}
             {engine === 'auction' && !hasWinner && (
               <div className="flex justify-between gap-4">
                 <span className={muted}>Lowest bid</span>
-                <span className="font-bold text-orange-500">{bids.hasLowest ? `${usd(bids.lowestBid)} by ${sameAddress(bids.lowestBidder, address) ? 'you' : shortAddress(bids.lowestBidder)}` : 'None yet'}</span>
+                <span className="font-bold text-orange-500">{bids.hasLowest ? <><Money usdc={bids.lowestBid} /> by {sameAddress(bids.lowestBidder, address) ? 'you' : shortAddress(bids.lowestBidder)}</> : 'None yet'}</span>
               </div>
             )}
           </div>

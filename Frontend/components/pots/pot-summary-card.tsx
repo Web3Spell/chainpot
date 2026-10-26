@@ -1,12 +1,12 @@
 'use client';
 
+import { Money } from '@/components/money';
+import { useChainPotAccount } from '@/lib/aa/account';
 import Link from 'next/link';
-import { useAccount, useReadContract } from 'wagmi';
-import { formatUnits } from 'viem';
+import { useReadContract } from 'wagmi';
 import { engineContract, usePot, usePotConfig } from '@/hooks/useRoscaEngine';
 import { PotStatus, engineLabel, formatDuration, potHref, sameAddress, shortAddress, type Engine } from '@/lib/pot';
 
-const usd = (v: bigint) => `$${Number(formatUnits(v, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 const STATUS = {
   [PotStatus.None]: 'Unknown',
@@ -25,7 +25,7 @@ interface PotSummaryCardProps {
 
 /** One pot card, shared by the pots grid and the dashboard lists. */
 export function PotSummaryCard({ potId, engine, isDarkMode, membersOnly }: PotSummaryCardProps) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const { pot, isLoading } = usePot(engine, potId);
   const { config } = usePotConfig(engine, potId);
   const { data: isMember } = useReadContract({
@@ -67,8 +67,8 @@ export function PotSummaryCard({ potId, engine, isDarkMode, membersOnly }: PotSu
           </span>
         </div>
         <div className="grid grid-cols-2 gap-4 py-4 border-t border-black/10 text-sm">
-          <div><p className={muted}>Each pays</p><p className="font-bold">{usd(pot.amountPerCycle)}</p></div>
-          <div><p className={muted}>Pot per round</p><p className="font-bold">{usd(pot.amountPerCycle * BigInt(pot.expectedMembers))}</p></div>
+          <div><p className={muted}>Each pays</p><p className="font-bold"><Money usdc={pot.amountPerCycle} /></p></div>
+          <div><p className={muted}>Pot per round</p><p className="font-bold"><Money usdc={pot.amountPerCycle * BigInt(pot.expectedMembers)} /></p></div>
           <div><p className={muted}>Every</p><p className="font-bold">{config ? formatDuration(config.cycleDuration) : '—'}</p></div>
           <div><p className={muted}>Progress</p><p className="font-bold">{progress}</p></div>
         </div>

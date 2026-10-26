@@ -1,5 +1,5 @@
 import { useReadContract } from "wagmi";
-import { useContractAction } from "./useContractAction";
+import { contractCall, useContractAction } from "./useContractAction";
 import { CONTRACT_CONFIG } from "../config/hooksConf";
 
 const registryConfig = {
@@ -81,4 +81,9 @@ export function useRegisterMember() {
   const action = useContractAction();
   const registerMember = () => action.write({ ...registryConfig, functionName: "registerMember", args: [] });
   return { ...action, registerMember };
+}
+
+/** registerMember as a batch step (first-time users join/create and register in one action). */
+export function registerMemberCall() {
+  return contractCall({ ...registryConfig, functionName: "registerMember", args: [] });
 }

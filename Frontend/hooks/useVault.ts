@@ -38,6 +38,6 @@ export function useTotalObligations() {
 
 export function useClaim() {
   const action = useContractAction();
-  const claim = () => action.write({ ...vaultConfig, functionName: "claim" });
+  const claim = () => action.write({ ...vaultConfig, functionName: "claim", args: [] });
   return { ...action, claim };
 }

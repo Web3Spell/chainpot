@@ -1,8 +1,8 @@
 'use client';
 
+import { Money } from '@/components/money';
+import { useChainPotAccount } from '@/lib/aa/account';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
-import { formatUnits } from 'viem';
 import { useUserActivityEvents, type ActivityEvent } from '@/hooks/useUserActivityEvents';
 import { INDEXER_URL, useActivity, type IndexedActivity } from '@/hooks/useIndexer';
 import { formatDateTime, potHref, type Engine } from '@/lib/pot';
@@ -48,13 +48,12 @@ const LIVE_LABEL: Record<ActivityEvent['type'], string> = {
   BidPlaced: 'You placed a bid',
 };
 
-const usd = (v: bigint) => `$${Number(formatUnits(v, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 
 export function MyActivities({ isDarkMode }: MyActivitiesProps) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const indexed = useActivity(address);
-  // Live subscriptions are only needed when there's no indexer.
-  const live = useUserActivityEvents(INDEXER_URL ? undefined : address);
+  // Live subscriptions are only needed when there's no indexer, or it's unreachable.
+  const live = useUserActivityEvents(INDEXER_URL && !indexed.isError ? undefined : address);
 
   const rows: Row[] = indexed.data
     ? indexed.data.map((a) => ({
@@ -100,7 +99,7 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
                 <div>
                   <p className="font-bold text-sm">
                     {r.label}
-                    {r.amount !== undefined && <span className="ml-2 text-green-600">{usd(r.amount)}</span>}
+                    {r.amount !== undefined && <span className="ml-2 text-green-600"><Money usdc={r.amount} /></span>}
                   </p>
                   <p className="text-xs text-gray-500">
                     {formatDateTime(r.timestamp)}

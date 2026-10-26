@@ -1,13 +1,13 @@
 'use client';
 
+import { useChainPotAccount } from '@/lib/aa/account';
 import { useEffect, useMemo, useState, memo, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAccount } from 'wagmi';
 import { parseEventLogs, parseUnits } from 'viem';
-import { useContractAction } from '@/hooks/useContractAction';
+import { contractCall, useContractAction } from '@/hooks/useContractAction';
 import { auctionContract, circleContract } from '@/hooks/useAuctionEngine';
-import { useCanCreate, useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
+import { registerMemberCall, useCanCreate, useIsRegistered } from '@/hooks/useMemberRegistry';
 import EngineSelector from './engine-selector';
 import { buildInviteTree, normalizeAddresses, publishInvite, saveInvite } from '@/lib/invite';
 import {
@@ -77,7 +77,7 @@ function toSeconds(days: string) {
 
 export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
   const router = useRouter();
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
 
   const [engine, setEngine] = useState<Engine>('circle');
   const [includeMe, setIncludeMe] = useState(true);
@@ -92,7 +92,6 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
 
   const { data: isRegistered, isLoading: regLoading } = useIsRegistered(address);
   const { data: canCreate } = useCanCreate(address);
-  const register = useRegisterMember();
   const create = useContractAction();
 
   // Final, deduplicated roster: the contract's memberCount must equal the invite-list size exactly.
@@ -164,12 +163,11 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
     const pay = BigInt(toSeconds(formData.paymentWindow));
     setSubmitted({ engine, addresses });
 
-    if (engine === 'circle') {
-      create.write({ ...circleContract, functionName: 'createPot', args: [root, n, amount, cycle, pay] });
-    } else {
-      const bid = BigInt(toSeconds(formData.biddingWindow));
-      create.write({ ...auctionContract, functionName: 'createPot', args: [root, n, amount, cycle, pay, bid] });
-    }
+    const createCall = engine === 'circle'
+      ? contractCall({ ...circleContract, functionName: 'createPot', args: [root, n, amount, cycle, pay] })
+      : contractCall({ ...auctionContract, functionName: 'createPot', args: [root, n, amount, cycle, pay, BigInt(toSeconds(formData.biddingWindow))] });
+    // First-time creators are registered in the same action.
+    create.writeBatch(isRegistered === false ? [registerMemberCall(), createCall] : [createCall]);
   };
 
   const n = roster.valid.length;
@@ -180,7 +178,6 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
     : null;
 
   const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
-  const needsRegistration = !!address && !regLoading && isRegistered === false;
   const blocked = !!address && isRegistered === true && canCreate === false;
 
   return (
@@ -194,17 +191,7 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
 
       {!address && (
         <div className="mb-6 p-4 rounded-xl border-2 border-yellow-500/50 bg-yellow-500/10 text-sm font-medium">
-          Connect your wallet to create a pot.
-        </div>
-      )}
-
-      {needsRegistration && (
-        <div className="mb-6 p-4 rounded-xl border-2 border-purple-500/50 bg-purple-500/10 flex flex-col md:flex-row md:items-center gap-3 justify-between">
-          <p className="text-sm font-medium">One-time step: register your account before creating a pot.</p>
-          <button type="button" onClick={register.registerMember} disabled={register.isBusy} className="px-5 py-2 rounded-full font-bold bg-black text-white disabled:opacity-50">
-            {register.isPending ? 'Confirm in wallet…' : register.isConfirming ? 'Registering…' : 'Register account'}
-          </button>
-          {register.errorMessage && <p className="text-xs text-red-500">{register.errorMessage}</p>}
+          Sign in to create a pot.
         </div>
       )}
 
@@ -274,10 +261,10 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
         <div className="flex gap-4 pt-8 border-t border-white/10">
           <button
             type="submit"
-            disabled={!address || needsRegistration || blocked || create.isBusy || create.isConfirmed}
+            disabled={!address || regLoading || blocked || create.isBusy || create.isConfirmed}
             className={`flex-1 px-8 py-3 rounded-full font-bold text-lg transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'bg-white text-black' : 'bg-black text-white'}`}
           >
-            {create.isPending ? 'Confirm in wallet…' : create.isConfirming ? 'Creating…' : create.isConfirmed ? 'Opening your pot…' : 'Create Pot'}
+            {create.isPending ? 'Confirming…' : create.isConfirming ? 'Creating…' : create.isConfirmed ? 'Opening your pot…' : 'Create Pot'}
           </button>
           <Link href="/pots" className={`flex-1 px-8 py-3 rounded-full font-bold text-lg transition-all text-center border-3 ${isDarkMode ? 'border-white/30 text-white' : 'border-black text-black'}`}>Cancel</Link>
         </div>

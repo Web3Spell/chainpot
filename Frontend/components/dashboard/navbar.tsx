@@ -1,10 +1,11 @@
 'use client';
 
+import { useChainPotAccount } from '@/lib/aa/account';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useTheme } from '@/providers/theme-provider';
-import { useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { AccountButton } from '@/components/aa/account-button';
+import { CountryButton } from '@/components/country-picker';
 import Image from 'next/image';
 import { useWithdrawable, useClaim } from '@/hooks/useVault';
 import { useUSDCDecimals } from '@/hooks/useUsdc';
@@ -16,7 +17,7 @@ interface NavbarProps {
 
 export function Navbar({ isDarkMode }: NavbarProps) {
   const { toggleTheme } = useTheme();
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const pathname = usePathname();
 
   const { data: withdrawable } = useWithdrawable(address);
@@ -73,7 +74,8 @@ export function Navbar({ isDarkMode }: NavbarProps) {
           <button onClick={toggleTheme} className={`px-4 py-2 rounded-full transition-all duration-300 font-medium text-sm ${isDarkMode ? 'bg-white/10 border border-white/20 text-white hover:bg-white/20' : 'bg-white/80 border border-black/20 text-black hover:bg-white'}`}>
             {isDarkMode ? '☀️ Light' : '🌙 Dark'}
           </button>
-          <ConnectButton accountStatus="avatar" chainStatus="icon" showBalance={false} />
+          <CountryButton isDarkMode={isDarkMode} />
+          <AccountButton isDarkMode={isDarkMode} compact />
         </div>
       </div>
     </header>

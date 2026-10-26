@@ -1,7 +1,7 @@
 'use client';
 
+import { useChainPotAccount } from '@/lib/aa/account';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
 import { usePotCounter } from '@/hooks/useRoscaEngine';
 import { PotSummaryCard } from '@/components/pots/pot-summary-card';
 import { useMyPots } from '@/hooks/useIndexer';
@@ -11,7 +11,7 @@ interface PoolOverviewProps {
 }
 
 export function PoolOverview({ isDarkMode }: PoolOverviewProps) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
 
   const { data: circleCountRaw } = usePotCounter("circle");
   const { data: auctionCountRaw } = usePotCounter("auction");

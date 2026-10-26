@@ -171,6 +171,40 @@ Phase 2 once Privy provides authenticated user IDs._
    notification preferences. Contract reads remain the source of truth; DB is cache + social layer.
 
 ### Phase 2 — Account abstraction (≈2 weeks)
+_Status 2026-10-26: built on branch `phase-2-account-abstraction`. Smart-account mode turns on when
+`NEXT_PUBLIC_PRIVY_APP_ID` is set; without it the app runs in own-wallet (RainbowKit) mode exactly as
+before. Not yet exercised against a real Privy app — see "Turning on smart accounts" below._
+
+**What's in the code**
+- `lib/aa/account.tsx` / `lib/aa/privy-account.tsx`: one `useChainPotAccount()` for both modes. In
+  smart mode the acting address is the Privy **smart wallet** (what goes on invite lists and holds
+  USDC), not the embedded signer. Users who sign in through Privy with their own wallet act as an EOA.
+- `hooks/useContractAction.ts`: every action goes allowlist check → simulation (single calls) →
+  plain-language confirmation sheet (smart mode; Privy's own wallet UI is off) → one batched send →
+  receipt → refresh. Batches: register + join, register + create, exact approve + pay.
+- `lib/aa/describe.ts`: the app refuses to sign anything except ChainPot contracts and USDC
+  approvals to the Vault.
+- `components/aa/confirm-sheet.tsx`, `components/aa/account-button.tsx` (Sign in · copy address ·
+  "Protect payments with Face ID / passkey" · Sign out).
+- Local currency: country asked once (pre-filled from the browser language, no IP lookup), FX via
+  `/api/fx` (ExchangeRate-API, cached 1h), `<Money>` shows "≈ ₹4,180 ($50.00)".
+- Privy is loaded client-only (`next/dynamic`, `ssr:false`) because its WalletConnect logger can't be
+  bundled for the server.
+
+**Turning on smart accounts (your accounts needed)**
+1. Create a Privy app → copy the App ID into `NEXT_PUBLIC_PRIVY_APP_ID` (Vercel + `.env.local`).
+2. Privy dashboard → Login methods: SMS, email, Google, Apple, passkey, external wallets. Add the
+   app's domains (localhost, preview, production) to allowed origins.
+3. Privy dashboard → Smart wallets: enable, choose an implementation (Kernel or Coinbase Smart
+   Wallet), add **Base Sepolia** with the CDP **bundler** and **paymaster** URLs (Coinbase Developer
+   Platform → Paymaster → Base Sepolia). Without a bundler URL Privy falls back to a heavily
+   rate-limited public bundler.
+4. CDP Portal → Paymaster: allowlist only the ChainPot contracts (CircleEngine, AuctionEngine,
+   MemberRegistry, Vault `claim`) and USDC `approve`; set a per-user limit and a monthly cap; apply
+   for gas credits.
+5. Privy dashboard → MFA: enable passkey MFA so "Protect payments with Face ID" works.
+6. Test on Base Sepolia: sign in with phone → join a pot from an invite link → pay → confirm one
+   sheet, one Face ID prompt, no gas.
 1. Privy provider replaces RainbowKit as primary; external wallets still allowed.
 2. Smart account per user on Base; **registration is folded into the first action**
    (`registerMember` batched with `joinPot` or `createPot`).

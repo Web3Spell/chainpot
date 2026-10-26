@@ -1,12 +1,12 @@
 'use client';
 
+import { useChainPotAccount } from '@/lib/aa/account';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
-import { useAccount } from 'wagmi';
 import { engineContract, useMemberState, usePot } from '@/hooks/useRoscaEngine';
-import { useCanJoin, useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
-import { useContractAction } from '@/hooks/useContractAction';
+import { registerMemberCall, useCanJoin, useIsRegistered } from '@/hooks/useMemberRegistry';
+import { contractCall, useContractAction } from '@/hooks/useContractAction';
 import { fetchInvite, inviteLink, inviteRoot, loadInvite, proofFor, publishInvite, readInviteFromHash, saveInvite } from '@/lib/invite';
 import { PotStatus, engineLabel, potHref, sameAddress, shortAddress, type Engine } from '@/lib/pot';
 
@@ -57,12 +57,11 @@ function useInviteList(engine: Engine, potId: bigint, merkleRoot?: `0x${string}`
 }
 
 export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const { pot } = usePot(engine, potId);
   const member = useMemberState(engine, potId, pot?.currentCycle ?? 0, address);
   const { data: isRegistered } = useIsRegistered(address);
   const { data: canJoin } = useCanJoin(address);
-  const register = useRegisterMember();
   const join = useContractAction();
   const leave = useContractAction();
   const start = useContractAction();
@@ -113,27 +112,24 @@ export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
   let joinCta: React.ReactNode = null;
   if (isOpen && !member.isMember) {
     const btn = `px-6 py-3 rounded-full font-bold transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`;
-    if (!address) joinCta = <p className={`text-sm font-medium ${muted}`}>Connect your wallet to join.</p>;
+    if (!address) joinCta = <p className={`text-sm font-medium ${muted}`}>Sign in to join.</p>;
     else if (isFull) joinCta = <p className={`text-sm font-medium ${muted}`}>This pot is full.</p>;
     else if (!inviteList) joinCta = <p className={`text-sm font-medium ${muted}`}>{inviteLoading ? 'Checking the invite list…' : 'Open the invite link the creator shared with you to join.'}</p>;
     else if (!onList || !proof) joinCta = <p className="text-sm font-medium text-red-500">Your connected address isn&apos;t on this pot&apos;s invite list.</p>;
-    else if (isRegistered === false) {
-      joinCta = (
-        <button onClick={register.registerMember} disabled={register.isBusy} className={btn}>
-          {register.isPending ? 'Confirm in wallet…' : register.isConfirming ? 'Registering…' : 'Step 1 of 2: Register account'}
-        </button>
-      );
-    } else if (canJoin === false) joinCta = <p className="text-sm font-medium text-red-500">Your account can&apos;t join pots right now (reputation too low or blacklisted).</p>;
+    else if (isRegistered === true && canJoin === false) joinCta = <p className="text-sm font-medium text-red-500">Your account can&apos;t join pots right now (reputation too low or blacklisted).</p>;
     else {
+      // First-time users are registered in the same action (one sponsored operation with a smart account).
+      const joinCall = contractCall({ ...contract, functionName: 'joinPot', args: [potId, proof] });
+      const handleJoin = () => join.writeBatch(isRegistered === false ? [registerMemberCall(), joinCall] : [joinCall]);
       joinCta = (
-        <button onClick={() => join.write({ ...contract, functionName: 'joinPot', args: [potId, proof] })} disabled={join.isBusy} className={btn}>
-          {join.isPending ? 'Confirm in wallet…' : join.isConfirming ? 'Joining…' : 'Join Pot'}
+        <button onClick={handleJoin} disabled={join.isBusy || isRegistered === undefined} className={btn}>
+          {join.isPending ? 'Confirming…' : join.isConfirming ? 'Joining…' : 'Join Pot'}
         </button>
       );
     }
   }
 
-  const errorMessage = join.errorMessage ?? register.errorMessage ?? leave.errorMessage ?? start.errorMessage;
+  const errorMessage = join.errorMessage ?? leave.errorMessage ?? start.errorMessage;
 
   return (
     <section className="mb-8">
@@ -162,7 +158,7 @@ export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
               title={isFull ? undefined : 'Everyone on the invite list must join first'}
               className={`px-6 py-3 rounded-full font-bold border-3 transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'border-white/30 text-white hover:bg-white/10' : 'border-black text-black hover:bg-black/10'}`}
             >
-              {start.isPending ? 'Confirm in wallet…' : start.isConfirming ? 'Starting…' : isFull ? 'Start Pot' : `Start Pot (${pot.memberCount}/${pot.expectedMembers} joined)`}
+              {start.isPending ? 'Confirming…' : start.isConfirming ? 'Starting…' : isFull ? 'Start Pot' : `Start Pot (${pot.memberCount}/${pot.expectedMembers} joined)`}
             </button>
           )}
         </div>

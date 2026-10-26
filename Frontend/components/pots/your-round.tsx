@@ -1,12 +1,13 @@
 'use client';
 
+import { useChainPotAccount } from '@/lib/aa/account';
 import { useMemo, useState } from 'react';
-import { useAccount } from 'wagmi';
 import { formatUnits, parseUnits } from 'viem';
 import { engineContract, useCycle, useMemberState, usePot } from '@/hooks/useRoscaEngine';
 import { auctionContract, useAuctionBids } from '@/hooks/useAuctionEngine';
-import { useUSDCAllowance, useUSDCApprove, useUSDCBalance } from '@/hooks/useUsdc';
-import { useContractAction } from '@/hooks/useContractAction';
+import { usdcApproveCall, useUSDCAllowance, useUSDCBalance } from '@/hooks/useUsdc';
+import { contractCall, useContractAction } from '@/hooks/useContractAction';
+import { Money } from '@/components/money';
 import { useNow } from '@/hooks/useNow';
 import { CONTRACT_CONFIG } from '@/config/hooksConf';
 import { CountdownTimer } from './countdown-timer';
@@ -25,7 +26,7 @@ const VAULT = CONTRACT_CONFIG.addresses.vault as `0x${string}`;
 
 /** What the connected member needs to do this round: pay, then (auction) bid. */
 export function YourRound({ potId, engine, isDarkMode }: YourRoundProps) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const now = useNow();
   const { pot } = usePot(engine, potId);
   const { cycle } = useCycle(engine, potId, pot?.currentCycle ?? 0);
@@ -90,44 +91,45 @@ export function YourRound({ potId, engine, isDarkMode }: YourRoundProps) {
 }
 
 function PayStep({ engine, potId, amount, deadline, isDarkMode }: { engine: Engine; potId: bigint; amount: bigint; deadline: number; isDarkMode: boolean }) {
-  const { address } = useAccount();
-  const { data: balance } = useUSDCBalance(address);
-  const { data: allowance } = useUSDCAllowance(address, VAULT);
-  const approve = useUSDCApprove(VAULT);
+  const account = useChainPotAccount();
+  const { data: balance } = useUSDCBalance(account.address);
+  const { data: allowance } = useUSDCAllowance(account.address, VAULT);
   const pay = useContractAction();
 
   const needsApproval = (allowance ?? BigInt(0)) < amount;
   const insufficient = balance !== undefined && balance < amount;
-  const busy = approve.isBusy || pay.isBusy;
   const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
 
-  const label = approve.isPending || pay.isPending ? 'Confirm in wallet…'
-    : approve.isConfirming ? 'Approving…'
-    : pay.isConfirming ? 'Paying…'
-    : needsApproval ? `Step 1 of 2: Allow ${usd(amount)}` : `Pay ${usd(amount)}`;
+  // One tap: exact-amount approval + payment. A smart account sends both as one sponsored operation;
+  // an own wallet asks twice.
+  const handlePay = () => {
+    const payCall = contractCall({ ...engineContract(engine), functionName: 'payForCycle', args: [potId] });
+    pay.writeBatch(needsApproval ? [usdcApproveCall(amount), payCall] : [payCall], [{ amount }, { amount }]);
+  };
+
+  const label = pay.isPending ? 'Confirming…' : pay.isConfirming ? 'Paying…' : <>Pay <Money usdc={amount} /></>;
 
   return (
     <div className="flex flex-col md:flex-row gap-6 md:items-center">
       <div className="flex-1">
-        <p className="text-xl font-bold">Pay {usd(amount)} for this round</p>
+        <p className="text-xl font-bold">Pay <Money usdc={amount} /> for this round</p>
         <CountdownTimer deadline={deadline} label="Due in" isDarkMode={isDarkMode} />
         <p className={`text-sm mt-2 ${muted}`}>
-          {needsApproval
-            ? 'First allow ChainPot to take exactly this amount of USDC, then confirm the payment.'
-            : 'Missing the deadline means losing your place in the pot, so pay early.'}
+          Missing the deadline means losing your place in the pot, so pay early.
+          {needsApproval && account.mode === 'eoa' && ' Your wallet will ask twice: first to allow exactly this amount, then to pay.'}
         </p>
-        {balance !== undefined && <p className={`text-xs mt-1 ${muted}`}>Your USDC balance: {usd(balance)}</p>}
+        {balance !== undefined && <p className={`text-xs mt-1 ${muted}`}>Your balance: <Money usdc={balance} /></p>}
         {insufficient && (
           <p className="text-sm mt-2 font-medium text-red-500">
-            You need {usd(amount - balance!)} more USDC.{' '}
+            You need <Money usdc={amount - balance!} /> more.{' '}
             <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer" className="underline">Get test USDC</a>
           </p>
         )}
-        {(approve.errorMessage || pay.errorMessage) && <p className="text-sm mt-2 font-medium text-red-500">{approve.errorMessage ?? pay.errorMessage}</p>}
+        {pay.errorMessage && <p className="text-sm mt-2 font-medium text-red-500">{pay.errorMessage}</p>}
       </div>
       <button
-        onClick={() => (needsApproval ? approve.approve(amount) : pay.write({ ...engineContract(engine), functionName: 'payForCycle', args: [potId] }))}
-        disabled={busy || insufficient}
+        onClick={handlePay}
+        disabled={pay.isBusy || insufficient}
         className="px-8 py-3 rounded-full font-bold bg-black text-white hover:bg-black/80 disabled:opacity-50 whitespace-nowrap"
       >
         {label}
@@ -137,7 +139,7 @@ function PayStep({ engine, potId, amount, deadline, isDarkMode }: { engine: Engi
 }
 
 function BidStep({ potId, cycleIdx, totalCollected, deadline, isDarkMode }: { potId: bigint; cycleIdx: number; totalCollected: bigint; deadline: number; isDarkMode: boolean }) {
-  const { address } = useAccount();
+  const { address } = useChainPotAccount();
   const bids = useAuctionBids(potId, cycleIdx, address);
   const place = useContractAction();
   const [input, setInput] = useState('');
@@ -200,7 +202,7 @@ function BidStep({ potId, cycleIdx, totalCollected, deadline, isDarkMode }: { po
           disabled={!input || !!problem || max === BigInt(0) || place.isBusy}
           className="px-8 py-3 rounded-full font-bold bg-black text-white hover:bg-black/80 disabled:opacity-50 whitespace-nowrap"
         >
-          {place.isPending ? 'Confirm in wallet…' : place.isConfirming ? 'Placing bid…' : 'Place bid'}
+          {place.isPending ? 'Confirming…' : place.isConfirming ? 'Placing bid…' : 'Place bid'}
         </button>
       </div>
       {place.errorMessage && <p className="text-sm mt-2 font-medium text-red-500">{place.errorMessage}</p>}
