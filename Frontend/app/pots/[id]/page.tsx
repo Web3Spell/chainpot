@@ -8,6 +8,7 @@ import { PotStats } from '@/components/pots/pot-stats';
 import { LifecyclePanel } from '@/components/pots/lifecycle-panel';
 import { CurrentCycle } from '@/components/pots/current-cycle';
 import { YourRound } from '@/components/pots/your-round';
+import { AutopayCard } from '@/components/pots/autopay-card';
 import { CycleHistory } from '@/components/pots/cycle-history';
 import { useTheme } from '@/providers/theme-provider';
 import { usePot } from '@/hooks/useRoscaEngine';
@@ -71,6 +72,7 @@ export default function PotDetailsPage() {
       <PotHeader {...props} />
       <LifecyclePanel {...props} />
       <YourRound {...props} />
+      <AutopayCard {...props} />
       <PotStats {...props} />
       <CurrentCycle {...props} />
       <CycleHistory {...props} />

@@ -220,6 +220,49 @@ before. Not yet exercised against a real Privy app — see "Turning on smart acc
    "send to my exchange".
 
 ### Phase 3 — Automation (≈1–2 weeks)
+_Status 2026-10-26: built on branch `phase-3-automation`: `keeper/` (dry-run verified against Base
+Sepolia), reminder engine + `/api/cron/reminders`, Privy-verified `/api/profile`, reminder settings
+card, migration `0002_notifications.sql`. Autopay and auto-start are designed below but not built —
+they need a decision and a configured Privy app._
+
+**Found while dry-running the keeper:** every draw on testnet currently reverts with Chainlink's
+`InvalidConsumer` — `VRFProviderV4` (`0x02C1…f504`) isn't added as a consumer of the VRF subscription
+used at deploy (DEPLOYMENT.md step 1). Until it's added at vrf.chain.link, no round with 2+ eligible
+members can pick a receiver. The app and keeper now report this in plain language.
+
+**Autopay & auto-start design (decision needed).** Both need the backend to act for the user within
+strict limits. Two ways to do it with Privy:
+
+| | A. Kernel on-chain session key (recommended) | B. Privy session signers + policies |
+|---|---|---|
+| Where limits are enforced | In the user's smart account contract (ZeroDev Kernel permission/call-policy plugin) | In Privy's signing service (policy engine) before the embedded signer signs |
+| Limit we'd set | target = engine, selector = `payForCycle`, arg `potId` = X; USDC `approve` spender = Vault, amount ≤ `amountPerCycle`; at most once per `cycleDuration`; expires at pot end | Same rules expressed as a Privy policy |
+| If our backend is compromised | Attacker can only pay that pot's installment from that user's balance | Same, provided Privy's policy holds |
+| Requirements | Privy smart wallet type = Kernel; grant flow signs one permission (Face ID) | Privy session signers enabled; authorization key in a KMS |
+| Revocation | On-chain revoke (one tap) | Remove signer in Privy |
+
+**Decision: A (built).** Auto-start is the same mechanism with one rule (`startPot(potId)` by the
+creator's account) and is not built yet.
+
+**Autopay as built**
+- `lib/aa/autopay.ts` — the on-chain rules: call policy allowing only `USDC.approve(Vault, ≤ one
+  installment)` and `payForCycle(thisPot)` on this engine, plus a timestamp policy that expires the
+  key one round after the pot's last possible round. No rate limit: the engine already allows one
+  payment per round, and a drifting window could block a legitimate payment.
+- Grant (browser, Privy smart accounts only): server creates the session key and returns only its
+  address + the exact scope → the member's embedded signer (Face ID if passkey MFA is on) signs the
+  permission → server verifies the blob (right wallet, exact policies, no private key) → active.
+- Executor `/api/cron/autopay`: pays as soon as a round opens if the member hasn't paid, isn't
+  defaulted and has the balance; never more than the agreed amount. Sends one sponsored user
+  operation through `AUTOPAY_BUNDLER_URL` / `AUTOPAY_PAYMASTER_URL`.
+- Off = the encrypted session key is destroyed; the on-chain permission then expires unused.
+- **Proven on a Base Sepolia fork** (`FORK_TESTS=1 npx vitest run lib/aa/autopay.fork.test.ts`):
+  the ZeroDev account address equals the Privy-style (permissionless Kernel 0.3.1) address; the key
+  works on an already-deployed wallet; the server's blob check passes on a real blob; the account
+  accepts approve-one-installment and approve+pay for this pot, and rejects USDC transfers, approvals
+  to other spenders, approvals above one installment, other pots, mixed batches, and use after expiry.
+- Needs before going live: Privy smart wallet type **Kernel**, `AUTOPAY_KEY_ENCRYPTION_KEY` (move to a
+  KMS), bundler + paymaster URLs, and an end-to-end test with a real Privy account.
 1. **Keeper worker** (idempotent, reads indexer, re-checks chain before each tx):
    `startCycle` when cadence allows → `settleCycle` after due date → `drawWinner`/`declareWinner`
    after windows → `finalizeDraw` on `RandomnessReady` → `cancelStuckVRFCycle` after timeout →

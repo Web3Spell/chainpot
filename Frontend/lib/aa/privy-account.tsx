@@ -5,8 +5,9 @@
 
 import { useCallback, useMemo } from 'react';
 import { useAccount } from 'wagmi';
-import { useMfaEnrollment, usePrivy } from '@privy-io/react-auth';
+import { getIdentityToken, useMfaEnrollment, usePrivy } from '@privy-io/react-auth';
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
+import { useGrantAutopay } from './privy-autopay';
 import { AccountContext, SPONSORED, encodeCall, useEoaSendCalls, type ChainPotAccount, type ContractCall } from './account';
 
 // ---- Smart-account mode (Privy) ----
@@ -22,6 +23,7 @@ export function PrivyAccountBridge({ children }: { children: React.ReactNode }) 
   const smartAddress = (user?.smartWallet?.address ?? client?.account?.address) as `0x${string}` | undefined;
   const isSmart = !!smartAddress;
   const address = smartAddress ?? externalAddress;
+  const grantAutopay = useGrantAutopay(smartAddress);
   const label = user?.email?.address ?? user?.phone?.number ?? user?.google?.email ?? undefined;
   const passkeyProtected = !!user?.mfaMethods?.includes('passkey');
 
@@ -49,9 +51,12 @@ export function PrivyAccountBridge({ children }: { children: React.ReactNode }) 
       login,
       logout: () => void logout(),
       enrollPasskey: isSmart ? showMfaEnrollmentModal : undefined,
+      contacts: { email: user?.email?.address, phone: user?.phone?.number },
+      getIdentityToken,
+      grantAutopay: isSmart ? grantAutopay : undefined,
       sendCalls: isSmart ? smartSend : eoaSend,
     }),
-    [isSmart, ready, authenticated, address, label, passkeyProtected, login, logout, showMfaEnrollmentModal, smartSend, eoaSend],
+    [isSmart, ready, authenticated, address, label, passkeyProtected, login, logout, showMfaEnrollmentModal, smartSend, eoaSend, user?.email?.address, user?.phone?.number, grantAutopay],
   );
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;

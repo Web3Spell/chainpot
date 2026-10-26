@@ -42,6 +42,15 @@ export interface ChainPotAccount {
   passkeyProtected: boolean;
   login: () => void;
   logout: () => void;
+  /** Phone / email Privy has verified for this user (smart mode). */
+  contacts?: { email?: string; phone?: string };
+  /**
+   * Sign the autopay permission for one pot (smart mode, Kernel wallets). Returns the serialized
+   * permission — limits + owner signature, no private key — for the server to activate.
+   */
+  grantAutopay?: (scope: import('./autopay').AutopayScope, sessionKeyAddress: `0x${string}`) => Promise<string>;
+  /** Privy identity token for authenticating to ChainPot's own API (smart mode). */
+  getIdentityToken?: () => Promise<string | null>;
   /** Opens Privy's enrollment flow for passkey (Face ID / fingerprint) protection. Smart mode only. */
   enrollPasskey?: () => void;
   /** Send calls in order. Returns the hash of the transaction that included the last call. */

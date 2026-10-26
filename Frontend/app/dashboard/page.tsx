@@ -7,6 +7,7 @@ import { YieldCard } from '@/components/dashboard/yield-card';
 import { PoolOverview } from '@/components/dashboard/pool-overview';
 import { BrowsePools } from '@/components/dashboard/browse-pools';
 import { MyActivities } from '@/components/dashboard/my-activities';
+import { ReminderSettings } from '@/components/dashboard/reminder-settings';
 import { useTheme } from '@/providers/theme-provider';
 
 export default function DashboardPage() {
@@ -21,6 +22,7 @@ export default function DashboardPage() {
         <YieldCard isDarkMode={isDarkMode} />
         <PoolOverview isDarkMode={isDarkMode} />
         <BrowsePools isDarkMode={isDarkMode} />
+        <ReminderSettings isDarkMode={isDarkMode} />
         <MyActivities isDarkMode={isDarkMode} />
       </div>
     </main>
