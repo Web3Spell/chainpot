@@ -121,3 +121,20 @@ export async function readPotCreator(engine: Engine, potId: bigint) {
   const pot = parsePot(await client.readContract({ ...engineAt(engine), functionName: "getPot", args: [potId] }));
   return pot?.creator;
 }
+
+/** The on-chain terms of a pot, for matching against an off-chain draft. */
+export async function readPotTerms(engine: Engine, potId: bigint) {
+  const e = engineAt(engine);
+  const pot = parsePot(await client.readContract({ ...e, functionName: "getPot", args: [potId] }));
+  if (!pot) return undefined;
+  const config = await client.readContract({ ...e, functionName: "getPotConfig", args: [potId] });
+  return {
+    creator: pot.creator,
+    merkleRoot: pot.merkleRoot,
+    expectedMembers: pot.expectedMembers,
+    amountPerCycle: pot.amountPerCycle,
+    cycleDuration: Number(config[0]),
+    paymentWindow: Number(config[1]),
+    biddingWindow: Number(config[2]),
+  };
+}

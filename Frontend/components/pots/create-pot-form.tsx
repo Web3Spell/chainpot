@@ -57,6 +57,13 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
   const [custom, setCustom] = useState({ every: '30', pay: '5', bid: '6' });
   const [engine, setEngine] = useState<Engine>('circle');
   const [includeMe, setIncludeMe] = useState(true);
+  // Invite-with-link needs a signed-in smart account (the server verifies who accepts).
+  const linkAvailable = !!account.getIdentityToken;
+  const [inviteMode, setInviteMode] = useState<'link' | 'addresses'>('link');
+  const mode = linkAvailable ? inviteMode : 'addresses';
+  const [groupSize, setGroupSize] = useState('5');
+  const [drafting, setDrafting] = useState(false);
+  const [draftError, setDraftError] = useState<string | null>(null);
   const [addresses, setAddresses] = useState('');
   const [submitted, setSubmitted] = useState<{ engine: Engine; addresses: `0x${string}`[]; name: string; emoji: string } | null>(null);
 
@@ -74,7 +81,7 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
       return BigInt(-1);
     }
   }, [amount]);
-  const n = roster.valid.length;
+  const n = mode === 'link' ? Math.floor(Number(groupSize)) || 0 : roster.valid.length;
 
   // Per-step validation, mirroring the contract's createPot checks.
   const errors: Record<number, string | undefined> = {
@@ -88,7 +95,9 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
     2: engine === 'auction' && !(schedule.bid >= schedule.pay + MIN_BIDDING_PHASE) ? 'Bidding must close at least 1 hour after payments close — adjust the schedule'
       : engine === 'auction' && schedule.bid >= schedule.every ? 'Bidding must close before the round ends — adjust the schedule'
       : undefined,
-    3: roster.invalid.length ? `Not valid addresses: ${roster.invalid.slice(0, 2).join(', ')}${roster.invalid.length > 2 ? '…' : ''}`
+    3: mode === 'link'
+      ? (n < MIN_MEMBERS || n > MAX_MEMBERS ? `Choose ${MIN_MEMBERS}–${MAX_MEMBERS} people` : undefined)
+      : roster.invalid.length ? `Not valid addresses: ${roster.invalid.slice(0, 2).join(', ')}${roster.invalid.length > 2 ? '…' : ''}`
       : n < MIN_MEMBERS ? `A circle needs at least ${MIN_MEMBERS} members` : n > MAX_MEMBERS ? `At most ${MAX_MEMBERS} members` : undefined,
     4: isRegistered === true && canCreate === false ? 'Your account can’t create circles right now' : undefined,
   };
@@ -113,7 +122,32 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
     })();
   }, [create.isConfirmed, create.receipt, submitted, router, account]);
 
+  const createLink = async () => {
+    if (drafting || firstInvalid !== undefined) return;
+    setDrafting(true);
+    setDraftError(null);
+    try {
+      const { id, token } = await apiFetch<{ id: string; token: string }>(account, '/api/drafts', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: name.trim(), emoji, engine, amountPerCycle: amountUnits.toString(), memberCount: n,
+          cycleDuration: schedule.every, paymentWindow: schedule.pay, biddingWindow: engine === 'auction' ? schedule.bid : 0,
+        }),
+      });
+      try {
+        localStorage.setItem(`chainpot:draft-link:${id}`, token);
+      } catch {
+        // the token also travels in the URL fragment below
+      }
+      router.push(`/circles/draft/${id}#t=${token}`);
+    } catch (err) {
+      setDraftError((err as Error).message);
+      setDrafting(false);
+    }
+  };
+
   const submit = () => {
+    if (mode === 'link') return void createLink();
     if (create.isBusy || firstInvalid !== undefined || errors[4]) return;
     const list = roster.valid;
     const root = buildInviteTree(list).root as `0x${string}`;
@@ -229,11 +263,33 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && mode === 'link' && (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-bold mb-1">Who&apos;s in?</h2>
+              <p className="text-sm text-cp-muted">You&apos;ll get one invite link to share — in your WhatsApp group, for example. Friends sign in with their phone and accept. You create the circle once they&apos;re in.</p>
+            </div>
+            <div>
+              <label htmlFor="group-size" className="block text-sm font-bold mb-2">How many people, including you?</label>
+              <input id="group-size" className={`${field} max-w-32`} inputMode="numeric" value={groupSize} onChange={(e) => setGroupSize(e.target.value.replace(/[^0-9]/g, ''))} />
+              <p className="text-xs text-cp-muted mt-2">That&apos;s also the number of rounds: everyone receives the pot once.</p>
+            </div>
+            <button type="button" onClick={() => setInviteMode('addresses')} className="text-sm font-bold underline underline-offset-4 text-cp-accent min-h-11">
+              I have their ChainPot addresses instead
+            </button>
+          </div>
+        )}
+
+        {step === 3 && mode === 'addresses' && (
           <div className="space-y-4">
             <div>
               <h2 className="text-lg font-bold mb-1">Who&apos;s in?</h2>
               <p className="text-sm text-cp-muted">Only these accounts can join. The circle starts once everyone has joined.</p>
+              {linkAvailable && (
+                <button type="button" onClick={() => setInviteMode('link')} className="text-sm font-bold underline underline-offset-4 text-cp-accent min-h-11">
+                  Invite with a link instead (easier)
+                </button>
+              )}
             </div>
             <label className="flex items-center gap-3 min-h-11 font-bold cursor-pointer">
               <input type="checkbox" checked={includeMe} onChange={(e) => setIncludeMe(e.target.checked)} className="h-5 w-5" />
@@ -243,7 +299,7 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
               <label htmlFor="members" className="block text-sm font-bold mb-2">Members&apos; ChainPot account addresses</label>
               <textarea id="members" rows={5} className={field} value={addresses} placeholder={'0x123…\n0x456…'} onChange={(e) => setAddresses(e.target.value)} aria-describedby="members-hint" />
               <p id="members-hint" className="text-xs text-cp-muted mt-2">
-                One per line. Friends find theirs under their name → “Copy account address”. Inviting by phone number is coming soon.
+                One per line. Friends find theirs under their name → “Copy account address”.
               </p>
             </div>
             <p className="text-sm font-bold" aria-live="polite">
@@ -271,6 +327,8 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
           <p role="alert" className="mt-4 text-sm font-bold text-cp-danger">{errors[step] ?? `Fix “${STEPS[firstInvalid!]}” first.`}</p>
         )}
         {create.errorMessage && <p role="alert" className="mt-4 text-sm font-bold text-cp-danger">{create.errorMessage}</p>}
+        {draftError && <p role="alert" className="mt-4 text-sm font-bold text-cp-danger">{draftError}</p>}
+        {step === 4 && mode === 'link' && <p className="mt-4 text-xs text-cp-muted">Nothing is charged yet. You&apos;ll create the circle after your friends accept.</p>}
 
         <div className="flex items-center justify-between gap-3 mt-8">
           {step > 0 ? (
@@ -282,6 +340,10 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
             <Button onClick={() => !errors[step] && setStep(step + 1)} disabled={!!errors[step]}>Continue</Button>
           ) : !account.isConnected ? (
             <Button size="lg" onClick={account.login}>Sign in to create</Button>
+          ) : mode === 'link' ? (
+            <Button size="lg" onClick={() => void createLink()} disabled={drafting || firstInvalid !== undefined}>
+              {drafting ? 'Creating link…' : 'Create invite link'}
+            </Button>
           ) : (
             <Button size="lg" onClick={submit} disabled={regLoading || create.isBusy || create.isConfirmed || firstInvalid !== undefined || !!errors[4]}>
               {create.isPending ? 'Confirming…' : create.isConfirming ? 'Creating…' : create.isConfirmed ? <><Check className="h-5 w-5" aria-hidden="true" /> Opening…</> : 'Create circle'}

@@ -281,7 +281,15 @@ _Status 2026-10-26: first pass built on branch `phase-4-ux-redesign`: brand toke
 button per circle, balance card), 5-step create wizard with frequency presets, creator-set circle
 names (`pot_meta`, migration 0004), circle page (invite hero, rounds timeline, members with
 paid/received/missed, bid slider, "Details & verify on-chain"), honest Explore page with live stats,
-mobile navigation. Not yet: Hindi/i18n, phone-number invites (needs draft circles), on-ramp._
+mobile navigation. Not yet: Hindi/i18n, on-ramp._
+
+_Invite-by-link (branch `phase-4b-link-invites`): the organizer drafts a circle off-chain and shares
+one `/join/<token>` link (WhatsApp share sheet); friends sign in with their phone and accept a seat
+(no charge); the organizer locks the roster and creates the circle on-chain with exactly the
+accepted members; the server links the draft only after re-reading the pot from the chain (same
+creator, Merkle root, count, amount and schedule) and then publishes the invite list + name so each
+member joins with one tap. Tokens are stored hashed; the public view never shows member addresses;
+the organizer can remove people, rotate the link, or cancel. Migration `0005_link_invites.sql`._
 Screens (mobile-first):
 
 - **Home**: list of "My circles" each with a single status line + one button

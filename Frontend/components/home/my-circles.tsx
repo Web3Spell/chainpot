@@ -8,11 +8,17 @@ import { Card, Skeleton } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ButtonLink, Button } from '@/components/ui/button';
 import { CircleCard } from './circle-card';
+import { DraftCard } from './draft-card';
+import { useMyDrafts } from '@/hooks/useDrafts';
 
 export function MyCircles() {
   const account = useChainPotAccount();
   const { pots, isLoading } = useMyPotIds(account.address);
   const nameOf = usePotNames(pots);
+  const drafts = useMyDrafts();
+  const joined = new Set(pots.map((p) => `${p.engine}:${p.potId}`));
+  // Drafts still forming, plus live circles from a draft that this user hasn't joined yet.
+  const pending = (drafts.data ?? []).filter((d) => d.status !== 'deployed' || (d.potId && !joined.has(`${d.engine}:${d.potId}`)));
 
   if (!account.isConnected) {
     return (
@@ -36,7 +42,7 @@ export function MyCircles() {
     );
   }
 
-  if (pots.length === 0) {
+  if (pots.length === 0 && pending.length === 0) {
     return (
       <Card>
         <EmptyState
@@ -51,6 +57,11 @@ export function MyCircles() {
 
   return (
     <ul className="grid gap-4 md:grid-cols-2">
+      {pending.map((d) => (
+        <li key={`draft:${d.id}`}>
+          <DraftCard d={d} />
+        </li>
+      ))}
       {pots.map((p) => (
         <li key={`${p.engine}:${p.potId}`}>
           <CircleCard engine={p.engine} potId={p.potId} name={nameOf(p.engine, p.potId)} />

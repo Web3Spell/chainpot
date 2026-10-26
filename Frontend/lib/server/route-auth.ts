@@ -21,3 +21,18 @@ export function requireCron(req: Request): NextResponse | null {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   return null;
 }
+
+/** Run an authenticated handler; typed errors with a `status` become JSON responses. */
+export async function withUser(req: Request, fn: (ctx: { query: Query; identity: PrivyIdentity }) => Promise<unknown>, okStatus = 200) {
+  const auth = await requireUser(req);
+  if (auth instanceof NextResponse) return auth;
+  try {
+    const body = await fn(auth);
+    return NextResponse.json(body ?? { ok: true }, { status: okStatus, headers: { "cache-control": "no-store" } });
+  } catch (err) {
+    const status = (err as { status?: number }).status;
+    if (typeof status === "number" && status < 500) return NextResponse.json({ error: (err as Error).message }, { status });
+    console.error("API error", err);
+    return NextResponse.json({ error: "something went wrong" }, { status: 503 });
+  }
+}
