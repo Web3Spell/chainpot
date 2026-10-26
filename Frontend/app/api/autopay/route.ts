@@ -1,3 +1,4 @@
+import { limitResponse, rateLimit, readJson } from "@/lib/server/limits";
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/server/route-auth";
 import { readPotFacts } from "@/lib/server/chain";
@@ -17,7 +18,13 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const auth = await requireUser(req);
   if (auth instanceof NextResponse) return auth;
-  const body = (await req.json().catch(() => ({}))) as { engine?: unknown; potId?: unknown };
+  let body: { engine?: unknown; potId?: unknown };
+  try {
+    await rateLimit(auth.query, `user:${auth.identity.userId}:autopay.create`, 10, 3600);
+    body = await readJson(req);
+  } catch (err) {
+    return limitResponse(err) ?? NextResponse.json({ error: "bad request" }, { status: 400 });
+  }
   const pot = parsePotParams(body.engine, body.potId);
   if (!pot) return NextResponse.json({ error: "bad pot id" }, { status: 400 });
   if (!auth.identity.smartWallet) return NextResponse.json({ error: "autopay needs a ChainPot smart account" }, { status: 400 });

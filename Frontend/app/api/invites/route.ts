@@ -1,3 +1,4 @@
+import { clientIp, limitResponse, rateLimit, readJson } from "@/lib/server/limits";
 import { NextResponse } from "next/server";
 import { getQuery } from "@/lib/server/db";
 import { readPotRoot } from "@/lib/server/chain";
@@ -7,9 +8,11 @@ import { defaultInviteStore, submitInviteList } from "@/lib/server/invites";
 export async function POST(req: Request) {
   let body: unknown;
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
+    // Public endpoint (each call reads the chain): limit per IP.
+    await rateLimit(getQuery(), `ip:${clientIp(req)}:invites.post`, 30, 3600);
+    body = await readJson(req);
+  } catch (err) {
+    return limitResponse(err) ?? NextResponse.json({ error: "invalid JSON" }, { status: 400 });
   }
   let result;
   try {

@@ -1,11 +1,17 @@
+import { clientIp, limitResponse, rateLimit } from "@/lib/server/limits";
 import { NextResponse } from "next/server";
 import { getQuery } from "@/lib/server/db";
 import { readPotRoot } from "@/lib/server/chain";
 import { defaultInviteStore, fetchInviteList } from "@/lib/server/invites";
 
 /** GET /api/invites/:engine/:potId — the invite list for the pot's current on-chain root. */
-export async function GET(_req: Request, { params }: { params: Promise<{ engine: string; potId: string }> }) {
+export async function GET(req: Request, { params }: { params: Promise<{ engine: string; potId: string }> }) {
   const { engine, potId } = await params;
+  try {
+    await rateLimit(getQuery(), `ip:${clientIp(req)}:invites.get`, 300, 3600);
+  } catch (err) {
+    return limitResponse(err)!;
+  }
   let result;
   try {
     result = await fetchInviteList(engine, potId, { store: defaultInviteStore(getQuery()), readRoot: readPotRoot });

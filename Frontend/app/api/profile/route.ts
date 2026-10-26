@@ -1,3 +1,4 @@
+import { limitResponse, rateLimit, readJson } from "@/lib/server/limits";
 import { NextResponse } from "next/server";
 import { getQuery } from "@/lib/server/db";
 import { AuthError, identityTokenFrom, verifyIdentityToken } from "@/lib/server/auth";
@@ -18,14 +19,12 @@ async function handle(req: Request, write: boolean) {
   }
   try {
     if (!write) return NextResponse.json(await getProfile(query, identity), { headers: { "cache-control": "no-store" } });
-    let body: unknown;
-    try {
-      body = await req.json();
-    } catch {
-      return NextResponse.json({ error: "invalid JSON" }, { status: 400 });
-    }
+    await rateLimit(query, `user:${identity.userId}:profile.put`, 30, 3600);
+    const body = await readJson(req);
     return NextResponse.json(await saveProfile(query, identity, (body ?? {}) as never), { headers: { "cache-control": "no-store" } });
   } catch (err) {
+    const limited = limitResponse(err);
+    if (limited) return limited;
     if (err instanceof ProfileError) return NextResponse.json({ error: err.message }, { status: 400 });
     console.error("profile API error", err);
     return NextResponse.json({ error: "profile storage unavailable" }, { status: 503 });

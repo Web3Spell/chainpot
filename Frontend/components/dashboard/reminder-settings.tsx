@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { useCurrency } from '@/providers/currency-provider';
@@ -43,13 +43,12 @@ export function ReminderSettings({ isDarkMode }: { isDarkMode: boolean }) {
   };
 
   const profile = useQuery({ queryKey: ['profile', account.address], queryFn: () => authed(), enabled, refetchInterval: false, retry: 1 });
-  const [draft, setDraft] = useState<Pick<Profile, 'channels' | 'prefs'> | null>(null);
+  // Edits on top of the loaded profile; until the user changes something, show what's saved.
+  const [edited, setDraft] = useState<Pick<Profile, 'channels' | 'prefs'> | null>(null);
+  const draft = edited ?? (profile.data ? { channels: profile.data.channels, prefs: profile.data.prefs } : null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (profile.data && !draft) setDraft({ channels: profile.data.channels, prefs: profile.data.prefs });
-  }, [profile.data, draft]);
 
   if (!enabled) return null;
 

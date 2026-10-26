@@ -1,3 +1,4 @@
+import { limitResponse, rateLimit, readJson } from "@/lib/server/limits";
 import { NextResponse } from "next/server";
 import { getQuery } from "@/lib/server/db";
 import { requireUser } from "@/lib/server/route-auth";
@@ -18,7 +19,13 @@ export async function GET(req: Request) {
 export async function PUT(req: Request) {
   const auth = await requireUser(req);
   if (auth instanceof NextResponse) return auth;
-  const body = (await req.json().catch(() => ({}))) as { engine?: unknown; potId?: unknown; name?: unknown; emoji?: unknown };
+  let body: { engine?: unknown; potId?: unknown; name?: unknown; emoji?: unknown };
+  try {
+    await rateLimit(auth.query, `user:${auth.identity.userId}:meta.put`, 20, 3600);
+    body = await readJson(req);
+  } catch (err) {
+    return limitResponse(err) ?? NextResponse.json({ error: "bad request" }, { status: 400 });
+  }
   const pot = parsePotParams(body.engine, body.potId);
   if (!pot) return NextResponse.json({ error: "bad pot id" }, { status: 400 });
   const creator = await readPotCreator(pot.engine, pot.potId);
