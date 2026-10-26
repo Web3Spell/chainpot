@@ -127,3 +127,27 @@ export function loadInvite(root: string): `0x${string}`[] | undefined {
   }
   return undefined;
 }
+
+// ---- Server copy (/api/invites) so invitees can join with a short link ----
+
+/** Store the list server-side. Best effort: the API verifies it against the on-chain root. */
+export async function publishInvite(engine: Engine, potId: bigint | string, addresses: `0x${string}`[]): Promise<boolean> {
+  try {
+    const res = await fetch("/api/invites", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ engine, potId: String(potId), addresses }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+export async function fetchInvite(engine: Engine, potId: bigint | string): Promise<`0x${string}`[] | null> {
+  const res = await fetch(`/api/invites/${engine}/${String(potId)}`);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`invite lookup failed (${res.status})`);
+  const body = (await res.json()) as { addresses: `0x${string}`[] };
+  return body.addresses;
+}

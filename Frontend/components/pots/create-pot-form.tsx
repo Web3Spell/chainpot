@@ -9,7 +9,7 @@ import { useContractAction } from '@/hooks/useContractAction';
 import { auctionContract, circleContract } from '@/hooks/useAuctionEngine';
 import { useCanCreate, useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
 import EngineSelector from './engine-selector';
-import { buildInviteTree, normalizeAddresses, saveInvite } from '@/lib/invite';
+import { buildInviteTree, normalizeAddresses, publishInvite, saveInvite } from '@/lib/invite';
 import {
   MAX_MEMBERS,
   MIN_AMOUNT_PER_CYCLE,
@@ -110,6 +110,8 @@ export function CreatePotForm({ isDarkMode }: CreatePotFormProps) {
     const [created] = parseEventLogs({ abi, eventName: 'PotCreated', logs: create.receipt.logs });
     if (!created) return;
     saveInvite(submitted.addresses);
+    // Share the list server-side so invitees can join from a short link; don't block navigation on it.
+    void publishInvite(submitted.engine, created.args.potId, submitted.addresses);
     router.push(`${potHref(submitted.engine, created.args.potId)}&created=1`);
   }, [create.isConfirmed, create.receipt, submitted, router]);
 

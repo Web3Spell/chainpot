@@ -2,89 +2,123 @@
 
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
+import { formatUnits } from 'viem';
 import { useUserActivityEvents, type ActivityEvent } from '@/hooks/useUserActivityEvents';
-import { potHref } from '@/lib/pot';
-
-const LABEL: Record<ActivityEvent['type'], string> = {
-  Joined: 'You joined',
-  PotCreated: 'You created this pot',
-  Paid: 'You paid for a round',
-  WinnerSelected: 'You received the payout 🎉',
-  BidPlaced: 'You placed a bid',
-};
+import { INDEXER_URL, useActivity, type IndexedActivity } from '@/hooks/useIndexer';
+import { formatDateTime, potHref, type Engine } from '@/lib/pot';
 
 interface MyActivitiesProps {
   isDarkMode: boolean;
 }
 
+interface Row {
+  key: string;
+  label: string;
+  engine: Engine | null;
+  potId: string | null;
+  amount?: bigint;
+  timestamp: number;
+  txHash?: string;
+}
+
+const CREDIT_LABEL: Record<number, string> = {
+  0: 'Your payout was credited',
+  1: 'Your share of interest/discount was credited',
+  2: 'A refund was credited',
+  3: 'A leftover amount was credited',
+};
+
+const INDEXED_LABEL: Record<IndexedActivity['type'], string> = {
+  created: 'You created a pot',
+  joined: 'You joined a pot',
+  left: 'You left a pot',
+  paid: 'You paid for a round',
+  bid: 'You placed a bid',
+  won: 'You were picked to receive the pot 🎉',
+  missed: 'You missed a payment deadline',
+  credited: 'Money was credited to you',
+  claimed: 'You cashed out',
+};
+
+const LIVE_LABEL: Record<ActivityEvent['type'], string> = {
+  Joined: 'You joined a pot',
+  PotCreated: 'You created a pot',
+  Paid: 'You paid for a round',
+  WinnerSelected: 'You were picked to receive the pot 🎉',
+  BidPlaced: 'You placed a bid',
+};
+
+const usd = (v: bigint) => `$${Number(formatUnits(v, 6)).toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+
 export function MyActivities({ isDarkMode }: MyActivitiesProps) {
   const { address } = useAccount();
-  const userAddress = (address as `0x${string}`) ?? undefined;
+  const indexed = useActivity(address);
+  // Live subscriptions are only needed when there's no indexer.
+  const live = useUserActivityEvents(INDEXER_URL ? undefined : address);
 
-  const { events, isLoading } = useUserActivityEvents(userAddress);
+  const rows: Row[] = indexed.data
+    ? indexed.data.map((a) => ({
+        key: a.id,
+        label: a.type === 'credited' ? CREDIT_LABEL[a.detail ?? -1] ?? INDEXED_LABEL.credited : INDEXED_LABEL[a.type],
+        engine: a.engine,
+        potId: a.potId,
+        amount: a.amount ? BigInt(a.amount) : undefined,
+        timestamp: a.timestamp,
+        txHash: a.txHash,
+      }))
+    : live.events.map((e, i) => ({
+        key: `${i}-${e.type}`,
+        label: LIVE_LABEL[e.type],
+        engine: e.engine,
+        potId: e.args.potId !== undefined ? String(e.args.potId) : null,
+        amount: e.args.amount,
+        timestamp: Math.floor(e.timestamp),
+      }));
 
-  if (isLoading) {
-    return (
-      <section className="py-12 space-y-6 pb-16">
-        <h2 className="text-3xl font-bold">My Activities</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="border-3 border-black rounded-3xl p-6 h-40 animate-pulse bg-black/10" />
-          <div className="border-3 border-black rounded-3xl p-6 h-40 animate-pulse bg-black/10" />
-        </div>
-      </section>
-    );
-  }
-
-  const joinEvents = events.filter(e => e.type === "Joined" || e.type === "PotCreated");
-  const activityEvents = events.filter(e => e.type === "WinnerSelected" || e.type === "BidPlaced" || e.type === "Paid");
+  const card = `border-3 border-black rounded-3xl p-6 backdrop-blur transition-colors ${isDarkMode ? 'text-white bg-white/5' : 'bg-white border-black text-black'}`;
 
   return (
     <section className="py-12 space-y-6 pb-16">
       <div className="space-y-2">
-        <h2 className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>My Activities</h2>
-        <p className={isDarkMode ? 'text-white/60' : 'text-black/60'}>Your activity since you opened this page (full history is coming soon)</p>
+        <h2 className={`text-3xl font-bold ${isDarkMode ? 'text-white' : 'text-black'}`}>My Activity</h2>
+        <p className={isDarkMode ? 'text-white/60' : 'text-black/60'}>
+          {indexed.data ? 'Everything that happened in your pots.' : 'Your activity since you opened this page.'}
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className={`border-3 border-black rounded-3xl p-6 backdrop-blur transition-colors space-y-4 ${isDarkMode ? 'text-white bg-white/5' : 'bg-white border-black text-black'}`}>
-          <h3 className="text-xl font-bold">My Join Activity</h3>
-          <div className="space-y-3 mt-4">
-            {joinEvents.length === 0 && <div className="text-gray-500">No join activity found in this session.</div>}
-            {joinEvents.map((ev, i) => (
-              <div key={i} className="p-3 rounded-lg border border-black/10">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-bold text-sm">Pot #{String(ev.args.potId)}</div>
-                    <div className="text-xs text-gray-500">{LABEL[ev.type]}</div>
-                  </div>
-                  <Link href={potHref(ev.engine, String(ev.args.potId))}>
-                    <button className="px-3 py-1 bg-black text-white rounded-full text-xs font-bold">View</button>
-                  </Link>
+      <div className={card}>
+        {!address ? (
+          <p className="text-gray-500">Connect your wallet to see your activity.</p>
+        ) : indexed.isLoading ? (
+          <div className="h-24 animate-pulse bg-black/10 rounded-xl" />
+        ) : rows.length === 0 ? (
+          <p className="text-gray-500">No activity yet.</p>
+        ) : (
+          <ul className="divide-y divide-black/10">
+            {rows.map((r) => (
+              <li key={r.key} className="py-3 flex flex-col md:flex-row md:items-center justify-between gap-2">
+                <div>
+                  <p className="font-bold text-sm">
+                    {r.label}
+                    {r.amount !== undefined && <span className="ml-2 text-green-600">{usd(r.amount)}</span>}
+                  </p>
+                  <p className="text-xs text-gray-500">
+                    {formatDateTime(r.timestamp)}
+                    {r.engine && r.potId && <> · {r.engine === 'circle' ? 'Community Circle' : 'Business ROSCA'} #{r.potId}</>}
+                    {r.txHash && (
+                      <> · <a className="underline" href={`https://sepolia.basescan.org/tx/${r.txHash}`} target="_blank" rel="noreferrer">receipt</a></>
+                    )}
+                  </p>
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className={`border-3 border-black rounded-3xl p-6 backdrop-blur transition-colors space-y-4 ${isDarkMode ? 'text-white bg-white/5' : 'bg-white border-black text-black'}`}>
-          <h3 className="text-xl font-bold">My Contributions & Wins</h3>
-          <div className="space-y-3 mt-4">
-            {activityEvents.length === 0 && <div className="text-gray-500">No recent activity found.</div>}
-            {activityEvents.map((ev, i) => (
-              <div key={i} className="p-3 rounded-lg border border-black/10">
-                <div className="flex justify-between items-center">
-                  <div>
-                    <div className="font-bold text-sm">Pot #{String(ev.args.potId)}</div>
-                    <div className="text-xs text-gray-500">{LABEL[ev.type]}</div>
-                  </div>
-                  <Link href={potHref(ev.engine, String(ev.args.potId))}>
-                    <button className="px-3 py-1 bg-black text-white rounded-full text-xs font-bold">View</button>
+                {r.engine && r.potId && (
+                  <Link href={potHref(r.engine, r.potId)} className="px-3 py-1 bg-black text-white rounded-full text-xs font-bold self-start md:self-auto">
+                    View
                   </Link>
-                </div>
-              </div>
+                )}
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        )}
       </div>
     </section>
   );

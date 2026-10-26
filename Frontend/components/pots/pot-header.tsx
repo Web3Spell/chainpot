@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useAccount } from 'wagmi';
 import { engineContract, useMemberState, usePot } from '@/hooks/useRoscaEngine';
 import { useCanJoin, useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
 import { useContractAction } from '@/hooks/useContractAction';
-import { inviteLink, loadInvite, inviteRoot, proofFor, readInviteFromHash, saveInvite } from '@/lib/invite';
-import { PotStatus, engineLabel, sameAddress, shortAddress, type Engine } from '@/lib/pot';
+import { fetchInvite, inviteLink, inviteRoot, loadInvite, proofFor, publishInvite, readInviteFromHash, saveInvite } from '@/lib/invite';
+import { PotStatus, engineLabel, potHref, sameAddress, shortAddress, type Engine } from '@/lib/pot';
 
 interface PotHeaderProps {
   potId: bigint;
@@ -15,18 +16,44 @@ interface PotHeaderProps {
   isDarkMode: boolean;
 }
 
-/** Invite list for this pot: from the share link (#invite=…) or the local cache, verified against the on-chain root. */
-function useInviteList(merkleRoot?: `0x${string}`) {
+/**
+ * Invite list for this pot, verified against the on-chain root. Sources in order: the share link
+ * (#invite=…), this browser's cache, then the server copy. Any list we hold is (re)published to the
+ * server so later invitees can use the short link.
+ */
+function useInviteList(engine: Engine, potId: bigint, merkleRoot?: `0x${string}`) {
   // Only rendered client-side after the pot loads, so reading window here is safe.
-  const fromHash = useMemo(() => {
+  const local = useMemo(() => {
     if (!merkleRoot || typeof window === 'undefined') return undefined;
-    const list = readInviteFromHash(window.location.hash);
-    return list && inviteRoot(list).toLowerCase() === merkleRoot.toLowerCase() ? list : undefined;
+    const fromHash = readInviteFromHash(window.location.hash);
+    if (fromHash && inviteRoot(fromHash).toLowerCase() === merkleRoot.toLowerCase()) return fromHash;
+    return loadInvite(merkleRoot);
   }, [merkleRoot]);
+
+  const server = useQuery({
+    queryKey: ['invite', engine, potId.toString(), merkleRoot],
+    queryFn: () => fetchInvite(engine, potId),
+    enabled: !!merkleRoot,
+    refetchInterval: false,
+    retry: 1,
+  });
+  const fromServer = server.data && merkleRoot && inviteRoot(server.data).toLowerCase() === merkleRoot.toLowerCase() ? server.data : undefined;
+  const list = local ?? fromServer;
+
+  const published = useRef(false);
+  const { isFetched, refetch } = server;
   useEffect(() => {
-    if (fromHash) saveInvite(fromHash); // remember it so this member can re-share later
-  }, [fromHash]);
-  return useMemo(() => fromHash ?? (merkleRoot && typeof window !== 'undefined' ? loadInvite(merkleRoot) : undefined), [fromHash, merkleRoot]);
+    if (!list) return;
+    saveInvite(list); // remember it so this member can re-share later
+    if (!fromServer && isFetched && !published.current) {
+      published.current = true;
+      void publishInvite(engine, potId, list).then((ok) => {
+        if (ok) void refetch();
+      });
+    }
+  }, [list, fromServer, isFetched, refetch, engine, potId]);
+
+  return { list, onServer: !!fromServer, loading: server.isLoading && !local };
 }
 
 export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
@@ -39,12 +66,16 @@ export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
   const join = useContractAction();
   const leave = useContractAction();
   const start = useContractAction();
-  const inviteList = useInviteList(pot?.merkleRoot);
+  const { list: inviteList, onServer, loading: inviteLoading } = useInviteList(engine, potId, pot?.merkleRoot);
   const [copied, setCopied] = useState(false);
 
   const shareUrl = useMemo(
-    () => (inviteList && typeof window !== 'undefined' ? inviteLink(window.location.origin, engine, potId, inviteList) : undefined),
-    [inviteList, engine, potId],
+    () => {
+      if (!inviteList || typeof window === 'undefined') return undefined;
+      // Short link when the server has the list; otherwise the list travels in the link itself.
+      return onServer ? `${window.location.origin}${potHref(engine, potId)}` : inviteLink(window.location.origin, engine, potId, inviteList);
+    },
+    [inviteList, onServer, engine, potId],
   );
 
   if (!pot) return null;
@@ -84,7 +115,7 @@ export function PotHeader({ potId, engine, isDarkMode }: PotHeaderProps) {
     const btn = `px-6 py-3 rounded-full font-bold transition-all duration-300 disabled:opacity-50 ${isDarkMode ? 'bg-white text-black hover:bg-white/90' : 'bg-black text-white hover:bg-black/90'}`;
     if (!address) joinCta = <p className={`text-sm font-medium ${muted}`}>Connect your wallet to join.</p>;
     else if (isFull) joinCta = <p className={`text-sm font-medium ${muted}`}>This pot is full.</p>;
-    else if (!inviteList) joinCta = <p className={`text-sm font-medium ${muted}`}>Open the invite link the creator shared with you to join.</p>;
+    else if (!inviteList) joinCta = <p className={`text-sm font-medium ${muted}`}>{inviteLoading ? 'Checking the invite list…' : 'Open the invite link the creator shared with you to join.'}</p>;
     else if (!onList || !proof) joinCta = <p className="text-sm font-medium text-red-500">Your connected address isn&apos;t on this pot&apos;s invite list.</p>;
     else if (isRegistered === false) {
       joinCta = (

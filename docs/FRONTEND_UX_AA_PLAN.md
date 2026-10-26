@@ -156,6 +156,10 @@ Goal: a crypto-native can run a full pot end-to-end in the UI.
 9. Delete the stale `Chainpot/Frontend` copy (separate commit, your call).
 
 ### Phase 1 — Foundations (≈1–2 weeks)
+_Status 2026-10-26: built on branch `phase-1-foundations` — `Frontend/lib/potState.ts` (+ tests), `indexer/`
+(Ponder, synced against Base Sepolia), `/api/invites` (trustless, root-verified) and
+`supabase/migrations/0001_init.sql`. Profiles / contacts / notification tables exist but are wired in
+Phase 2 once Privy provides authenticated user IDs._
 1. **Pot state machine** (`lib/potState.ts`): pure function
    `(pot, config, cycle, member flags, now) → { phase, nextAction, deadline, explanation }` with phases
    `Invited · Joined/WaitingForMembers · WaitingForRound · PayDue · PaidWaiting · BiddingOpen ·

@@ -10,7 +10,8 @@ import { useContractAction } from '@/hooks/useContractAction';
 import { useNow } from '@/hooks/useNow';
 import { CONTRACT_CONFIG } from '@/config/hooksConf';
 import { CountdownTimer } from './countdown-timer';
-import { PotStatus, cyclePhase, formatDateTime, maxAllowedBid, minBidStep, sameAddress, type Engine } from '@/lib/pot';
+import { memberAction } from '@/lib/potState';
+import { PotStatus, formatDateTime, maxAllowedBid, minBidStep, sameAddress, type Engine } from '@/lib/pot';
 
 interface YourRoundProps {
   potId: bigint;
@@ -29,48 +30,55 @@ export function YourRound({ potId, engine, isDarkMode }: YourRoundProps) {
   const { pot } = usePot(engine, potId);
   const { cycle } = useCycle(engine, potId, pot?.currentCycle ?? 0);
   const member = useMemberState(engine, potId, pot?.currentCycle ?? 0, address);
-  const phase = cyclePhase(engine, cycle, now);
 
   if (!pot || !cycle || !address || !member.isMember || pot.status !== PotStatus.Active) return null;
-  if (phase === 'none' || phase === 'completed') return null;
+
+  const action = memberAction({
+    engine, pot, cycle, now,
+    viewer: {
+      address, isCreator: false, isMember: member.isMember, hasWon: member.hasWon,
+      defaulted: member.defaulted, paidThisRound: member.paid,
+    },
+  });
 
   const card = `p-8 rounded-2xl border-3 border-black ${isDarkMode ? 'bg-white/5' : 'bg-white/90'}`;
   const muted = isDarkMode ? 'text-gray-400' : 'text-gray-600';
+  const paid = <p className="text-green-600 font-bold mb-2">✓ You&apos;ve paid for this round.</p>;
 
   let body: React.ReactNode;
-  if (member.defaulted) {
-    body = (
-      <p className="font-medium text-red-500">
-        You missed a payment deadline in this pot, so you can no longer pay, bid or receive a payout here.
-      </p>
-    );
-  } else if (phase === 'payment' && !member.paid) {
-    body = <PayStep engine={engine} potId={potId} amount={pot.amountPerCycle} deadline={cycle.paymentDeadline} isDarkMode={isDarkMode} />;
-  } else if (!member.paid) {
-    body = <p className="font-medium text-red-500">The payment deadline for this round passed before you paid. You&apos;ll be marked as having missed it.</p>;
-  } else if (engine === 'auction' && !member.hasWon && (phase === 'payment' || phase === 'bidding')) {
-    body = phase === 'payment' ? (
-      <div>
-        <p className="text-green-600 font-bold mb-2">✓ You&apos;ve paid for this round.</p>
-        <p className={muted}>Bidding opens when payments close, {formatDateTime(cycle.paymentDeadline)}.</p>
-        <CountdownTimer deadline={cycle.paymentDeadline} label="Bidding opens in" isDarkMode={isDarkMode} />
-      </div>
-    ) : (
-      <BidStep potId={potId} cycleIdx={pot.currentCycle} totalCollected={cycle.totalCollected} deadline={cycle.biddingDeadline} isDarkMode={isDarkMode} />
-    );
-  } else {
-    body = (
-      <div>
-        <p className="text-green-600 font-bold mb-2">✓ You&apos;ve paid for this round.</p>
-        <p className={muted}>
-          {member.hasWon
-            ? 'You already received this pot\'s payout. Keep paying each round so the others get theirs.'
-            : phase === 'drawing'
-              ? 'The receiver is being drawn now.'
-              : 'Nothing else to do. The receiver is picked after the deadline.'}
-        </p>
-      </div>
-    );
+  switch (action.kind) {
+    case 'defaulted':
+      body = <p className="font-medium text-red-500">You missed a payment deadline in this pot, so you can no longer pay, bid or receive a payout here.</p>;
+      break;
+    case 'pay':
+      body = <PayStep engine={engine} potId={potId} amount={action.amount} deadline={action.deadline} isDarkMode={isDarkMode} />;
+      break;
+    case 'missedPayment':
+      body = <p className="font-medium text-red-500">The payment deadline for this round passed before you paid. You&apos;ll be marked as having missed it.</p>;
+      break;
+    case 'paidWaitingForBidding':
+      body = (
+        <div>
+          {paid}
+          <p className={muted}>Bidding opens when payments close, {formatDateTime(action.opensAt)}.</p>
+          <CountdownTimer deadline={action.opensAt} label="Bidding opens in" isDarkMode={isDarkMode} />
+        </div>
+      );
+      break;
+    case 'bid':
+      body = <BidStep potId={potId} cycleIdx={pot.currentCycle} totalCollected={cycle.totalCollected} deadline={action.closesAt} isDarkMode={isDarkMode} />;
+      break;
+    case 'received':
+      body = <div>{paid}<p className={muted}>You already received this pot&apos;s payout. Keep paying each round so the others get theirs.</p></div>;
+      break;
+    case 'drawing':
+      body = <div>{paid}<p className={muted}>The receiver is being drawn now.</p></div>;
+      break;
+    case 'paidWaitingForDraw':
+      body = <div>{paid}<p className={muted}>Nothing else to do. The receiver is picked after the deadline.</p></div>;
+      break;
+    default:
+      return null; // between rounds: the Next step panel explains when the next round starts
   }
 
   return (

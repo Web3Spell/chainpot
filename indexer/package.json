@@ -1,0 +1,25 @@
+{
+  "name": "chainpot-indexer",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "ponder dev",
+    "start": "ponder start --schema ${DATABASE_SCHEMA:-chainpot}",
+    "codegen": "ponder codegen",
+    "typecheck": "tsc"
+  },
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "hono": "^4.13.14",
+    "ponder": "^0.18.2",
+    "viem": "^2.57.11"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "typescript": "^7.0.2"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18.18"
+  }
+}
