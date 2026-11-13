@@ -6,6 +6,7 @@ import { MyCircles } from '@/components/home/my-circles';
 import { BalanceCard } from '@/components/home/balance-card';
 import { ReminderSettings } from '@/components/dashboard/reminder-settings';
 import { MyActivities } from '@/components/dashboard/my-activities';
+import { OnboardingGate } from '@/components/onboarding/onboarding-gate';
 import { ButtonLink } from '@/components/ui/button';
 import { useTheme } from '@/providers/theme-provider';
 
@@ -15,6 +16,7 @@ export default function HomePage() {
   return (
     <main className={`min-h-screen bg-cp-page text-cp-ink transition-colors duration-300 ${isDarkMode ? '' : 'bg-gradient-to-br from-purple-100 via-purple-50 to-purple-200'}`}>
       <Navbar isDarkMode={isDarkMode} />
+      <OnboardingGate />
       <div className="px-4 sm:px-6 md:px-12 py-8 max-w-6xl mx-auto space-y-8">
         <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>

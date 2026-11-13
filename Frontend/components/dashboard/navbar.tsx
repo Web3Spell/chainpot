@@ -55,7 +55,7 @@ export function Navbar({ isDarkMode }: NavbarProps) {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0">
           {ready > BigInt(0) && (
             <button
               type="button"

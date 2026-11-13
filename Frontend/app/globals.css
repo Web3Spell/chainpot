@@ -173,3 +173,9 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* Onboarding slide fade-in (motion-safe only via the utility that references it). */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
