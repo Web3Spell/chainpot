@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useSyncExternalStore } from 'react';
 import { useChainPotAccount } from '@/lib/aa/account';
 
 const KEY = 'chainpot:onboarded';
@@ -21,11 +21,21 @@ function write(address: string) {
   try {
     const raw = localStorage.getItem(KEY);
     const seen = raw ? (JSON.parse(raw) as string[]) : [];
-    const next = Array.from(new Set([...seen, address.toLowerCase()]));
-    localStorage.setItem(KEY, JSON.stringify(next));
+    localStorage.setItem(KEY, JSON.stringify(Array.from(new Set([...seen, address.toLowerCase()]))));
+    // Same-tab listeners don't get the native 'storage' event, so nudge them.
+    window.dispatchEvent(new Event('chainpot:onboarded-change'));
   } catch {
     // private window / blocked storage: the intro just shows again next time, which is harmless.
   }
+}
+
+function subscribe(cb: () => void) {
+  window.addEventListener('storage', cb);
+  window.addEventListener('chainpot:onboarded-change', cb);
+  return () => {
+    window.removeEventListener('storage', cb);
+    window.removeEventListener('chainpot:onboarded-change', cb);
+  };
 }
 
 /**
@@ -36,15 +46,17 @@ function write(address: string) {
 export function useOnboarding() {
   const account = useChainPotAccount();
   const address = account.isConnected ? account.address : undefined;
-  const [seen, setSeen] = useState(true); // assume seen until we can read storage (avoids a flash)
 
-  useEffect(() => {
-    setSeen(read(address));
-  }, [address]);
+  // useSyncExternalStore keeps SSR safe (server snapshot = "seen", so nothing flashes) and re-reads
+  // whenever storage changes. The snapshot is a primitive boolean, so React compares it by value.
+  const seen = useSyncExternalStore(
+    subscribe,
+    () => read(address),
+    () => true,
+  );
 
   const dismiss = useCallback(() => {
     if (address) write(address);
-    setSeen(true);
   }, [address]);
 
   return { show: !!address && !seen, dismiss };

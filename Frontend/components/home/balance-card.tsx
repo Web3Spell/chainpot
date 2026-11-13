@@ -1,13 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Copy, Wallet } from 'lucide-react';
+import { Copy, Plus, Wallet } from 'lucide-react';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { useClaim, useWithdrawable } from '@/hooks/useVault';
 import { useUSDCBalance } from '@/hooks/useUsdc';
 import { Money } from '@/components/money';
 import { Card, Skeleton } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ONRAMP_ENABLED } from '@/lib/onramp';
+import { AddMoneySheet } from './add-money';
 
 /** What the member has: spendable balance + money waiting in ChainPot, with one way in and one way out. */
 export function BalanceCard() {
@@ -17,6 +19,7 @@ export function BalanceCard() {
   const waiting = (waitingRaw as bigint | undefined) ?? BigInt(0);
   const claim = useClaim();
   const [copied, setCopied] = useState(false);
+  const [addMoneyOpen, setAddMoneyOpen] = useState(false);
   if (!account.isConnected) return null;
 
   const copy = async () => {
@@ -57,14 +60,21 @@ export function BalanceCard() {
       {claim.errorMessage && <p className="text-sm text-cp-danger mt-2">{claim.errorMessage}</p>}
 
       <div className="mt-5 flex flex-wrap gap-3">
-        <Button variant="secondary" onClick={copy}>
-          <Copy className="h-4 w-4" aria-hidden="true" />
-          {copied ? 'Address copied' : 'Add money (copy my address)'}
-        </Button>
+        {ONRAMP_ENABLED ? (
+          <Button onClick={() => setAddMoneyOpen(true)}>
+            <Plus className="h-4 w-4" aria-hidden="true" /> Add money
+          </Button>
+        ) : (
+          <Button variant="secondary" onClick={copy}>
+            <Copy className="h-4 w-4" aria-hidden="true" />
+            {copied ? 'Address copied' : 'Add money (copy my address)'}
+          </Button>
+        )}
         <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer" className="inline-flex items-center min-h-11 px-2 text-sm font-bold underline underline-offset-4 text-cp-accent">
           Get test USDC
         </a>
       </div>
+      {addMoneyOpen && <AddMoneySheet onClose={() => setAddMoneyOpen(false)} />}
     </Card>
   );
 }
