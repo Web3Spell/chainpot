@@ -61,3 +61,6 @@ marketing-video/
 *~
 
 !.env.example
+
+# Local demo render (950MB: node_modules, mp4s, wav) — not for git
+demo-video/
