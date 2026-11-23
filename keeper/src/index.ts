@@ -12,6 +12,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
 import { auctionAbi, engineAbi, engineAddress, loadBalances, loadSnapshots, makePublicClient, vaultAbi, vaultAddress } from "./chain.ts";
 import { planClaims, planPot, type KeeperAction } from "./plan.ts";
+import { CRON_PATHS, cronDue, pingCron } from "./cron.ts";
 
 const env = process.env;
 const DRY_RUN = env.DRY_RUN !== "false";
@@ -20,6 +21,11 @@ const INTERVAL_SEC = Number(env.INTERVAL_SEC ?? 60);
 const CLAIM_MIN = BigInt(env.CLAIM_MIN_USDC_UNITS ?? 1_000_000); // 1 USDC: don't spend gas pushing dust
 const CLAIM_OPT_OUT = new Set((env.CLAIM_OPT_OUT ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
 const MAX_FEE = env.MAX_FEE_GWEI ? parseGwei(env.MAX_FEE_GWEI) : parseGwei("1"); // refuse to send above this
+// Optional: drive the app's reminder + autopay cron routes (Vercel Hobby only allows daily crons).
+const APP_URL = env.APP_URL;
+const CRON_SECRET = env.CRON_SECRET;
+const CRON_EVERY_SEC = Number(env.CRON_EVERY_SEC ?? 900);
+let lastCron: number | undefined;
 
 // Reverts from contracts outside ChainPot's ABIs that operators need to recognise.
 const KNOWN_SELECTORS: Record<string, string> = {
@@ -99,10 +105,25 @@ export async function tick() {
       log("error", { action: a, error: (err as Error).message.split("\n")[0] });
     }
   }
+  await runCron();
+}
+
+/** Ping the app's cron routes when due. Off unless APP_URL and CRON_SECRET are set. */
+async function runCron() {
+  if (!APP_URL || !CRON_SECRET || !cronDue(lastCron, Date.now(), CRON_EVERY_SEC)) return;
+  lastCron = Date.now();
+  for (const path of CRON_PATHS) {
+    try {
+      const r = await pingCron(APP_URL, CRON_SECRET, path);
+      log(r.ok ? "cron" : "cron_error", { path, status: r.status, ...(r.ok ? {} : { body: r.body }) });
+    } catch (err) {
+      log("cron_error", { path, error: (err as Error).message.split("\n")[0] });
+    }
+  }
 }
 
 async function main() {
-  log("start", { dryRun: DRY_RUN, rpc: new URL(RPC_URL).host, sender: simulateFrom, intervalSec: INTERVAL_SEC });
+  log("start", { dryRun: DRY_RUN, rpc: new URL(RPC_URL).host, sender: simulateFrom, intervalSec: INTERVAL_SEC, cron: APP_URL && CRON_SECRET ? `${new URL(APP_URL).host} every ${CRON_EVERY_SEC}s` : "off" });
   if (process.argv.includes("--once")) return tick();
   for (;;) {
     try {

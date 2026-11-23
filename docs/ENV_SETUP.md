@@ -13,7 +13,7 @@ them in Vercel/Railway env settings, or local `.env.local` files (gitignored). V
 | **Coinbase Developer Platform (CDP)** | Bundler + paymaster (free gas), RPC (CDP Node), gas credits | portal.cdp.coinbase.com → create project → Paymaster (Base Sepolia): copy the RPC/paymaster URL, set contract allowlist + per-user limits; Node: copy the Base Sepolia RPC URL. Apply for gas credits there. |
 | **Supabase project** | Postgres for invites, profiles, drafts, autopay, rate limits | supabase.com → new project (region Mumbai) → run `supabase/migrations/0001…0006` in order (SQL editor or Supabase CLI) → Settings → Database → **connection pooler** string. |
 | **Reown (WalletConnect) project** | "Connect wallet" option for crypto-native users | cloud.reown.com → new project → Project ID. Add your domains to its allowlist. |
-| **Vercel project** | Hosts the Next.js app + cron jobs | vercel.com → import repo, root directory `Frontend`. Cron every 15 min needs a Pro plan (or call the cron routes from the keeper). |
+| **Vercel project** | Hosts the Next.js app + cron jobs | vercel.com → import repo, root directory `Frontend`. On Hobby, `vercel.json` runs the cron routes once a day (the plan's limit); the keeper calls them every 15 min when `APP_URL` + `CRON_SECRET` are set (see section 4). |
 | **Always-on worker host** (Railway / Fly / any VPS) | Runs the keeper loop and the Ponder indexer | railway.app or fly.io — two services: `keeper/` and `indexer/`. |
 | **Resend** *(optional: email reminders)* | Sends reminder emails | resend.com → API key; verify your sending domain. |
 | **Twilio** *(optional: SMS / WhatsApp reminders)* | Sends SMS + WhatsApp | twilio.com → Account SID + Auth Token; buy an SMS number; WhatsApp sender (sandbox for testing). India SMS needs DLT template registration; production WhatsApp needs approved templates. |
@@ -62,6 +62,7 @@ them in Vercel/Railway env settings, or local `.env.local` files (gitignored). V
 | `MAX_FEE_GWEI` | optional | Gas-price ceiling (default `1`). |
 | `INTERVAL_SEC` | optional | Loop interval (default `60`). |
 | `CLAIM_MIN_USDC_UNITS`, `CLAIM_OPT_OUT` | optional | Auto-collect threshold (default `1000000` = $1) / addresses that collect manually. |
+| `APP_URL`, `CRON_SECRET` | ✅ on Vercel Hobby | Same values as the app's. The keeper then calls `/api/cron/reminders` and `/api/cron/autopay` every `CRON_EVERY_SEC` (default 900 = 15 min). |
 
 ## 5. Local-only / testing
 
