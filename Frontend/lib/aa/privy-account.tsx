@@ -8,6 +8,7 @@ import { useAccount } from 'wagmi';
 import { getIdentityToken, useMfaEnrollment, usePrivy } from '@privy-io/react-auth';
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 import { useGrantAutopay } from './privy-autopay';
+import { clearIdentityToken, sharedIdentityToken } from './identity-token';
 import { AccountContext, SPONSORED, encodeCall, useEoaSendCalls, type ChainPotAccount, type ContractCall } from './account';
 
 // ---- Smart-account mode (Privy) ----
@@ -26,6 +27,13 @@ export function PrivyAccountBridge({ children }: { children: React.ReactNode }) 
   const grantAutopay = useGrantAutopay(smartAddress);
   const label = user?.email?.address ?? user?.phone?.number ?? user?.google?.email ?? undefined;
   const passkeyProtected = !!user?.mfaMethods?.includes('passkey');
+  // One shared token per user instead of one Privy call per API request (see identity-token.ts).
+  const userId = user?.id;
+  const identityToken = useCallback(() => (userId ? sharedIdentityToken(getIdentityToken, userId) : Promise.resolve(null)), [userId]);
+  const signOut = useCallback(() => {
+    clearIdentityToken();
+    void logout();
+  }, [logout]);
 
   const smartSend = useCallback(
     async (calls: ContractCall[]) => {
@@ -49,14 +57,14 @@ export function PrivyAccountBridge({ children }: { children: React.ReactNode }) 
       sponsored: isSmart && SPONSORED,
       passkeyProtected: isSmart && passkeyProtected,
       login,
-      logout: () => void logout(),
+      logout: signOut,
       enrollPasskey: isSmart ? showMfaEnrollmentModal : undefined,
       contacts: { email: user?.email?.address, phone: user?.phone?.number },
-      getIdentityToken,
+      getIdentityToken: identityToken,
       grantAutopay: isSmart ? grantAutopay : undefined,
       sendCalls: isSmart ? smartSend : eoaSend,
     }),
-    [isSmart, ready, authenticated, address, label, passkeyProtected, login, logout, showMfaEnrollmentModal, smartSend, eoaSend, user?.email?.address, user?.phone?.number, grantAutopay],
+    [isSmart, ready, authenticated, address, label, passkeyProtected, login, signOut, showMfaEnrollmentModal, smartSend, eoaSend, user?.email?.address, user?.phone?.number, grantAutopay, identityToken],
   );
 
   return <AccountContext.Provider value={value}>{children}</AccountContext.Provider>;
