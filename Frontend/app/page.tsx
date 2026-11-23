@@ -3,50 +3,22 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useAccount } from 'wagmi';
-import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { motion, useAnimation } from 'framer-motion';
+import { useChainPotAccount } from '@/lib/aa/account';
+import { AccountButton } from '@/components/aa/account-button';
+import { motion, type Variants } from 'framer-motion';
 import { clashDisplaySemibold } from './ui/fonts';
 
-import { useIsRegistered, useRegisterMember } from '@/hooks/useMemberRegistry';
 import Image from 'next/image';
 
 export default function Home() {
   const router = useRouter();
-  const { address, isConnected } = useAccount();
+  const account = useChainPotAccount();
+  const [wantsDashboard, setWantsDashboard] = useState(false);
 
-  const [showRegisterModal, setShowRegisterModal] = useState(false);
-  const [checkingStatus, setCheckingStatus] = useState(false);
-
-  const {
-    data: isRegistered,
-    isLoading: isCheckingRegistration,
-    isFetched: isRegistrationFetched,
-    refetch: refetchRegistration,
-  } = useIsRegistered(address as `0x${string}`);
-
-  const { registerMember, isPending: isRegistering, isConfirming, isConfirmed, error } = useRegisterMember();
-
+  // Registration is folded into the first join/create, so "Get started" only needs a signed-in account.
   useEffect(() => {
-    if (isConfirmed) {
-      const finishRegistration = async () => {
-        setCheckingStatus(true);
-        await refetchRegistration?.();
-        setShowRegisterModal(false);
-        router.push('/dashboard');
-        setCheckingStatus(false);
-      };
-      finishRegistration();
-    }
-  }, [isConfirmed, refetchRegistration, router]);
-
-  useEffect(() => {
-    if (error) {
-      console.error('Registration error', error);
-      alert(error.message || 'Registration failed. See console for details.');
-      setCheckingStatus(false);
-    }
-  }, [error]);
+    if (wantsDashboard && account.isConnected) router.push('/dashboard');
+  }, [wantsDashboard, account.isConnected, router]);
 
   const [activeNav, setActiveNav] = useState('home');
 
@@ -56,63 +28,9 @@ export default function Home() {
     { id: 'about', label: 'About', href: '/' },
   ];
 
-  const ensureRegistrationState = async () => {
-    if (!address) return null;
-    if (!isRegistrationFetched) {
-      setCheckingStatus(true);
-      try {
-        await refetchRegistration?.();
-      } catch (e) {
-        // ignore
-      } finally {
-        setCheckingStatus(false);
-      }
-    }
-    return isRegistered;
-  };
-
-  const handleGetStarted = async () => {
-    if (!isConnected || !address) {
-      alert('Please connect your wallet first.');
-      return;
-    }
-
-    if (isCheckingRegistration) {
-      setCheckingStatus(true);
-      return;
-    }
-
-    await ensureRegistrationState();
-
-    if (isRegistered === true) {
-      router.push('/dashboard');
-      return;
-    }
-
-    if (isRegistered === false) {
-      setShowRegisterModal(true);
-      return;
-    }
-
-    setCheckingStatus(true);
-    try {
-      await refetchRegistration?.();
-      if (isRegistered === true) {
-        router.push('/dashboard');
-      } else {
-        setShowRegisterModal(true);
-      }
-    } catch (err) {
-      console.error('Error checking registration:', err);
-      alert('Could not verify registration. Try again.');
-    } finally {
-      setCheckingStatus(false);
-    }
-  };
-
-  const handleRegister = () => {
-    if (!address) return alert('Wallet not connected');
-    registerMember();
+  const handleGetStarted = () => {
+    setWantsDashboard(true);
+    if (!account.isConnected) account.login();
   };
 
   // Animation variants
@@ -127,7 +45,7 @@ export default function Home() {
     },
   };
 
-  const itemVariants: any = {
+  const itemVariants: Variants = {
     hidden: { y: 30, opacity: 0 },
     visible: {
       y: 0,
@@ -139,7 +57,7 @@ export default function Home() {
     },
   };
 
-  const headerVariants: any = {
+  const headerVariants: Variants = {
     hidden: { y: -100, opacity: 0 },
     visible: {
       y: 0,
@@ -151,7 +69,7 @@ export default function Home() {
     },
   };
 
-  const titleVariants: any = {
+  const titleVariants: Variants = {
     hidden: { scale: 0.8, opacity: 0 },
     visible: {
       scale: 1,
@@ -163,7 +81,7 @@ export default function Home() {
     },
   };
 
-  const buttonVariants: any= {
+  const buttonVariants: Variants = {
     hidden: { scale: 0.8, opacity: 0 },
     visible: {
       scale: 1,
@@ -183,27 +101,6 @@ export default function Home() {
       },
     },
     tap: { scale: 0.95 },
-  };
-
-  const modalVariants: any = {
-    hidden: { opacity: 0, scale: 0.8, y: 50 },
-    visible: {
-      opacity: 1,
-      scale: 1,
-      y: 0,
-      transition: {
-        duration: 0.4,
-        ease: [0.6, 0.05, 0.01, 0.9],
-      },
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.8,
-      y: 50,
-      transition: {
-        duration: 0.3,
-      },
-    },
   };
 
   return (
@@ -290,7 +187,7 @@ export default function Home() {
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.7, duration: 0.5 }}
           >
-            <ConnectButton />
+            <AccountButton isDarkMode />
           </motion.div>
         </motion.header>
 
@@ -326,7 +223,7 @@ export default function Home() {
               variants={itemVariants}
               className="text-lg md:text-xl text-white/80 leading-relaxed font-light max-w-3xl mx-auto"
             >
-              Revolutionary rotating savings and credit associations powered by blockchain.
+              Save together with people you trust. Everyone chips in each round, one person gets the pot, and waiting money earns interest.
             </motion.p>
 
             <motion.div
@@ -365,98 +262,6 @@ export default function Home() {
         </motion.footer>
       </div>
 
-      {/* REGISTER MODAL + LOADING */}
-      {(showRegisterModal || checkingStatus) && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md"
-        >
-          <motion.div
-            variants={modalVariants}
-            initial="hidden"
-            animate="visible"
-            exit="exit"
-            className="rounded-2xl p-8 w-[90%] max-w-md text-center shadow-xl backdrop-blur-lg bg-white/5 border border-white/20"
-          >
-            {checkingStatus ? (
-              <div className="flex flex-col items-center justify-center py-6">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                  className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full"
-                />
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.2 }}
-                  className="text-white/80 mt-4"
-                >
-                  Please wait...
-                </motion.p>
-              </div>
-            ) : (
-              <>
-                <motion.h2
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="text-white text-2xl font-semibold mb-4"
-                >
-                  Complete Registration
-                </motion.h2>
-
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.1 }}
-                  className="text-white/70 mb-6"
-                >
-                  You are not registered yet.
-                  <br />
-                  Press the button below to register your account on-chain.
-                </motion.p>
-
-                <motion.button
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={handleRegister}
-                  disabled={isRegistering || isConfirming}
-                  className="w-full py-3 rounded-full text-sm font-semibold transition-all bg-white text-black hover:bg-white/90"
-                >
-                  {isRegistering || isConfirming ? (
-                    <div className="flex items-center justify-center gap-2">
-                      <motion.div
-                        animate={{ rotate: 360 }}
-                        transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
-                        className="w-4 h-4 border-2 border-black/40 border-t-black rounded-full"
-                      />
-                      {isConfirming ? 'Confirming on chain...' : 'Waiting for signature...'}
-                    </div>
-                  ) : (
-                    'Register'
-                  )}
-                </motion.button>
-
-                <motion.button
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  whileHover={{ scale: 1.02, backgroundColor: 'rgba(255, 255, 255, 0.1)' }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setShowRegisterModal(false)}
-                  className="w-full mt-4 py-3 rounded-full transition-all border border-white/30 text-white"
-                >
-                  Cancel
-                </motion.button>
-              </>
-            )}
-          </motion.div>
-        </motion.div>
-      )}
     </main>
   );
 }

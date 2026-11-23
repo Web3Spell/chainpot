@@ -1,12 +1,12 @@
 'use client';
 
-import { useCallback } from 'react';
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
-import type { Address } from 'viem';
+import { useChainPotAccount } from '@/lib/aa/account';
+import { useReadContract } from 'wagmi';
+import { contractCall, useContractAction } from './useContractAction';
 import { CONTRACT_CONFIG } from '../config/hooksConf';
 
 // Minimal ERC-20 ABI slices we need
-const USDC_ABI = [
+export const USDC_ABI = [
   {
     name: 'approve',
     type: 'function',
@@ -28,6 +28,13 @@ const USDC_ABI = [
     outputs: [{ name: '', type: 'uint256' }]
   },
   {
+    name: 'balanceOf',
+    type: 'function',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }]
+  },
+  {
     name: 'decimals',
     type: 'function',
     stateMutability: 'view',
@@ -40,7 +47,7 @@ export function useUSDCAllowance(
   owner?: `0x${string}` | null,
   spender?: `0x${string}` | null
 ) {
-  const { address: connected } = useAccount();
+  const { address: connected } = useChainPotAccount();
   const token = CONTRACT_CONFIG.addresses.usdc as `0x${string}`;
   const spend = spender ?? (CONTRACT_CONFIG.addresses.vault as `0x${string}`);
   const ownerAddress = owner ?? connected ?? '';
@@ -81,48 +88,32 @@ export function useUSDCDecimals() {
   };
 }
 
+export function useUSDCBalance(owner?: `0x${string}`) {
+  const { data, isLoading, refetch } = useReadContract({
+    address: CONTRACT_CONFIG.addresses.usdc as `0x${string}`,
+    abi: USDC_ABI,
+    functionName: 'balanceOf',
+    args: owner ? [owner] : undefined,
+    query: { enabled: !!owner },
+  });
+  return { data: data as bigint | undefined, isLoading, refetch };
+}
+
+/** Exact-amount approval of USDC to `spender` (defaults to the Vault). */
 export function useUSDCApprove(spender?: `0x${string}` | null) {
   const spend = spender ?? (CONTRACT_CONFIG.addresses.vault as `0x${string}`);
-  const token = CONTRACT_CONFIG.addresses.usdc as `0x${string}`;
+  const action = useContractAction();
+  const approve = (amount: bigint) =>
+    action.write({
+      address: CONTRACT_CONFIG.addresses.usdc as `0x${string}`,
+      abi: USDC_ABI,
+      functionName: 'approve',
+      args: [spend, amount],
+    });
+  return { ...action, approve };
+}
 
-  const { 
-    writeContractAsync, 
-    data: hash, 
-    isPending, 
-    error: writeError 
-  } = useWriteContract();
-
-  const { 
-    isLoading: isConfirming, 
-    isSuccess: isConfirmed,
-    error: confirmError
-  } = useWaitForTransactionReceipt({ hash });
-
-  const approve = useCallback(
-    async (amount: bigint) => {
-      try {
-        const txHash = await writeContractAsync({
-          address: token,
-          abi: USDC_ABI,
-          functionName: 'approve',
-          args: [spend, amount],
-        });
-        
-        return { hash: txHash };
-      } catch (error) {
-        console.error('Approve transaction failed:', error);
-        throw error;
-      }
-    },
-    [writeContractAsync, token, spend]
-  );
-
-  return {
-    approve,
-    hash,
-    isPending,
-    isConfirming,
-    isConfirmed,
-    error: writeError ?? confirmError,
-  };
+/** Exact-amount USDC approval to the Vault, for batching in front of a payment. */
+export function usdcApproveCall(amount: bigint, spender: `0x${string}` = CONTRACT_CONFIG.addresses.vault as `0x${string}`) {
+  return contractCall({ address: CONTRACT_CONFIG.addresses.usdc as `0x${string}`, abi: USDC_ABI, functionName: 'approve', args: [spender, amount] });
 }

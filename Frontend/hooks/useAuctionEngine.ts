@@ -1,86 +1,56 @@
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useReadContract } from "wagmi";
 import { CONTRACT_CONFIG } from "../config/hooksConf";
 
-const auctionConfig = {
+export const auctionContract = {
   address: CONTRACT_CONFIG.addresses.auctionEngine as `0x${string}`,
   abi: CONTRACT_CONFIG.abis.auctionEngine,
 };
 
-export function useLowestBid(potId: number | bigint, cycleIdx: number | bigint) {
-  return useReadContract({
-    ...auctionConfig,
+export const circleContract = {
+  address: CONTRACT_CONFIG.addresses.circleEngine as `0x${string}`,
+  abi: CONTRACT_CONFIG.abis.circleEngine,
+};
+
+const id = (v: number | bigint | undefined) => BigInt(v || 0);
+
+/** Lowest bid, bidder and the user's own bid for an AUCTION pot's cycle. Pass enabled=false for circle pots. */
+export function useAuctionBids(
+  potId: number | bigint,
+  cycleIdx: number | bigint,
+  user: `0x${string}` | undefined,
+  enabled = true,
+) {
+  const on = enabled && !!potId && !!cycleIdx;
+  const lowestBid = useReadContract({
+    ...auctionContract,
     functionName: "lowestBid",
-    args: [BigInt(potId || 0), BigInt(cycleIdx || 0)],
-    query: { enabled: !!potId && !!cycleIdx },
+    args: [id(potId), id(cycleIdx)],
+    query: { enabled: on },
   });
-}
-
-export function useLowestBidder(potId: number | bigint, cycleIdx: number | bigint) {
-  return useReadContract({
-    ...auctionConfig,
+  const lowestBidder = useReadContract({
+    ...auctionContract,
     functionName: "lowestBidder",
-    args: [BigInt(potId || 0), BigInt(cycleIdx || 0)],
-    query: { enabled: !!potId && !!cycleIdx },
+    args: [id(potId), id(cycleIdx)],
+    query: { enabled: on },
   });
-}
-
-export function useBidOf(potId: number | bigint, cycleIdx: number | bigint, user: `0x${string}` | undefined) {
-  return useReadContract({
-    ...auctionConfig,
+  const myBid = useReadContract({
+    ...auctionContract,
     functionName: "bidOf",
-    args: user ? [BigInt(potId || 0), BigInt(cycleIdx || 0), user] : undefined,
-    query: { enabled: !!potId && !!cycleIdx && !!user },
+    args: user ? [id(potId), id(cycleIdx), user] : undefined,
+    query: { enabled: on && !!user },
   });
-}
-
-export function useCreateAuctionPot() {
-  const { data: hash, isPending, writeContract, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-
-  const createPot = (
-    merkleRoot: `0x${string}`,
-    memberCount: number,
-    amountPerCycle: bigint,
-    cycleDuration: number,
-    paymentWindow: number,
-    biddingWindow: number
-  ) => {
-    writeContract({
-      ...auctionConfig,
-      functionName: "createPot",
-      args: [merkleRoot, BigInt(memberCount), amountPerCycle, BigInt(cycleDuration), BigInt(paymentWindow), BigInt(biddingWindow)],
-    });
+  const hasBid = useReadContract({
+    ...auctionContract,
+    functionName: "hasBidThisCycle",
+    args: user ? [id(potId), id(cycleIdx), user] : undefined,
+    query: { enabled: on && !!user },
+  });
+  const bidder = lowestBidder.data as `0x${string}` | undefined;
+  return {
+    lowestBid: (lowestBid.data as bigint | undefined) ?? BigInt(0),
+    lowestBidder: bidder,
+    hasLowest: !!bidder && bidder !== "0x0000000000000000000000000000000000000000",
+    myBid: (myBid.data as bigint | undefined) ?? BigInt(0),
+    hasBid: !!hasBid.data,
   };
-
-  return { createPot, hash, isPending, isConfirming, isConfirmed, error };
-}
-
-export function usePlaceBid() {
-  const { data: hash, isPending, writeContract, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-
-  const placeBid = (potId: bigint, amount: bigint) => {
-    writeContract({
-      ...auctionConfig,
-      functionName: "placeBid",
-      args: [potId, amount],
-    });
-  };
-
-  return { placeBid, hash, isPending, isConfirming, isConfirmed, error };
-}
-
-export function useDeclareWinner() {
-  const { data: hash, isPending, writeContract, error } = useWriteContract();
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-
-  const declareWinner = (potId: bigint) => {
-    writeContract({
-      ...auctionConfig,
-      functionName: "declareWinner",
-      args: [potId],
-    });
-  };
-
-  return { declareWinner, hash, isPending, isConfirming, isConfirmed, error };
 }

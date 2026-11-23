@@ -1,27 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { Plus } from 'lucide-react';
 import { Navbar } from '@/components/dashboard/navbar';
-import { HeroSection } from '@/components/dashboard/hero-section';
-import { StatsCards } from '@/components/dashboard/stats-card';
-import { YieldCard } from '@/components/dashboard/yield-card';
-import { PoolOverview } from '@/components/dashboard/pool-overview';
-import { BrowsePools } from '@/components/dashboard/browse-pools';
+import { MyCircles } from '@/components/home/my-circles';
+import { BalanceCard } from '@/components/home/balance-card';
+import { ReminderSettings } from '@/components/dashboard/reminder-settings';
 import { MyActivities } from '@/components/dashboard/my-activities';
+import { OnboardingGate } from '@/components/onboarding/onboarding-gate';
+import { ButtonLink } from '@/components/ui/button';
 import { useTheme } from '@/providers/theme-provider';
 
-export default function DashboardPage() {
-  const {isDarkMode} = useTheme()
+export default function HomePage() {
+  const { isDarkMode } = useTheme();
 
   return (
-    <main className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'bg-black' : 'bg-gradient-to-br from-purple-100 via-purple-50 to-purple-200'}`}>
-      <Navbar isDarkMode={isDarkMode}/>
-      <div className={`px-6 md:px-12 py-8 max-w-7xl mx-auto ${isDarkMode ? 'text-white' : 'text-black'}`}>
-        <HeroSection isDarkMode={isDarkMode} />
-        <StatsCards isDarkMode={isDarkMode} />
-        <YieldCard isDarkMode={isDarkMode} />
-        <PoolOverview isDarkMode={isDarkMode} />
-        <BrowsePools isDarkMode={isDarkMode} />
+    <main className={`min-h-screen bg-cp-page text-cp-ink transition-colors duration-300 ${isDarkMode ? '' : 'bg-gradient-to-br from-purple-100 via-purple-50 to-purple-200'}`}>
+      <Navbar isDarkMode={isDarkMode} />
+      <OnboardingGate />
+      <div className="px-4 sm:px-6 md:px-12 py-8 max-w-6xl mx-auto space-y-8">
+        <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-black">Your circles</h1>
+            <p className="text-cp-muted mt-1">What&apos;s due, what you&apos;ve received, and what&apos;s next.</p>
+          </div>
+          <ButtonLink href="/pots/create" size="lg">
+            <Plus className="h-5 w-5" aria-hidden="true" /> Start a circle
+          </ButtonLink>
+        </header>
+
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
+          <section aria-labelledby="circles-heading" className="space-y-4">
+            <h2 id="circles-heading" className="sr-only">My circles</h2>
+            <MyCircles />
+          </section>
+          <aside className="space-y-6">
+            <BalanceCard />
+          </aside>
+        </div>
+
+        <ReminderSettings isDarkMode={isDarkMode} />
         <MyActivities isDarkMode={isDarkMode} />
       </div>
     </main>
