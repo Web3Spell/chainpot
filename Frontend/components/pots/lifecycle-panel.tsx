@@ -1,6 +1,7 @@
 'use client';
 
 import { useChainPotAccount } from '@/lib/aa/account';
+import { useEffect } from 'react';
 import { useSimulateContract } from 'wagmi';
 import { engineContract, useCycle, useDrawReady, useMemberState, usePot, usePotConfig } from '@/hooks/useRoscaEngine';
 import { auctionContract, circleContract } from '@/hooks/useAuctionEngine';
@@ -28,7 +29,8 @@ export function LifecyclePanel({ potId, engine }: LifecyclePanelProps) {
   const { cycle } = useCycle(engine, potId, pot?.currentCycle ?? 0);
   const member = useMemberState(engine, potId, pot?.currentCycle ?? 0, address);
   const drawing = cyclePhase(engine, cycle, now) === 'drawing';
-  const { data: drawReady } = useDrawReady(engine, potId, drawing);
+  const drawReadyQ = useDrawReady(engine, potId, drawing);
+  const drawReady = drawReadyQ.data;
   const { data: indexed } = usePotIndex(engine, potId);
   const action = useContractAction();
   const contract = engineContract(engine);
@@ -42,6 +44,13 @@ export function LifecyclePanel({ potId, engine }: LifecyclePanelProps) {
     account: address,
     query: { enabled: drawing && !drawReady && !!address && vrfRequestedAt === undefined, refetchInterval: 60_000 },
   });
+  // cancelStuckVRFCycle also succeeds once the randomness has arrived (the contract consumes it), so a
+  // successful simulation only means "stuck" if a readiness check at least as fresh says it isn't ready.
+  const { refetch: refetchReady } = drawReadyQ;
+  useEffect(() => {
+    if (retry.isSuccess) void refetchReady();
+  }, [retry.isSuccess, retry.dataUpdatedAt, refetchReady]);
+  const retryStuck = retry.isSuccess && drawReady === false && drawReadyQ.dataUpdatedAt >= retry.dataUpdatedAt;
 
   if (!pot || pot.status === PotStatus.Open) return null;
 
@@ -49,7 +58,7 @@ export function LifecyclePanel({ potId, engine }: LifecyclePanelProps) {
     engine, pot, config, cycle, now,
     drawReady: !!drawReady,
     vrfRequestedAt,
-    retrySimulates: vrfRequestedAt === undefined ? retry.isSuccess : undefined,
+    retrySimulates: vrfRequestedAt === undefined ? (retryStuck ? true : undefined) : undefined,
   });
 
   const muted = 'text-cp-muted';

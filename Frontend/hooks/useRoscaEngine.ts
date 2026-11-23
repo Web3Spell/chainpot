@@ -65,7 +65,8 @@ export function useDrawReady(engine: Engine, potId: number | bigint, enabled = t
     ...engineContract(engine),
     functionName: "drawReady",
     args: [id(potId)],
-    query: { enabled: enabled && !!potId },
+    // Poll while a draw is pending so "Finalize" appears soon after Chainlink delivers.
+    query: { enabled: enabled && !!potId, refetchInterval: enabled ? 10_000 : false },
   });
 }
 
