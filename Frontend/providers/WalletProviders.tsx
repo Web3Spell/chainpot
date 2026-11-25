@@ -11,6 +11,7 @@ import { WalletAccountBridge } from '@/lib/aa/account';
 import { ConfirmProvider } from '@/components/aa/confirm-sheet';
 import { CurrencyProvider } from '@/providers/currency-provider';
 import { CountryPicker } from '@/components/country-picker';
+import { TermsGate } from '@/components/legal/terms-gate';
 
 // Privy (and the WalletConnect stack it bundles) is browser-only: rendering it on the server pulls in
 // Node-only logging deps. The app is client-rendered behind it, with a neutral loading shell.
@@ -39,6 +40,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <ConfirmProvider>
         {children}
         <CountryPicker />
+        <TermsGate />
       </ConfirmProvider>
     </CurrencyProvider>
   );
