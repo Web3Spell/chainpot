@@ -70,7 +70,10 @@ export function validateTerms(input: Record<string, unknown>): DraftTerms {
 }
 
 async function ensureProfile(query: Query, identity: PrivyIdentity) {
-  if (!identity.smartWallet) throw new DraftError("sign in with a ChainPot account first", 401);
+  // A brand-new account's first token can predate its smart wallet; the client refreshes and retries.
+  if (!identity.smartWallet) {
+    throw new DraftError("Your ChainPot account is still being set up. Wait a few seconds and try again. (Signed in with an outside wallet? Use phone, email or Google instead.)", 401);
+  }
   await query(
     `insert into profiles (user_id, address) values ($1, $2)
      on conflict (user_id) do update set address = coalesce(profiles.address, excluded.address)`,
