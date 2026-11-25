@@ -259,7 +259,10 @@ export default function Home() {
           transition={{ delay: 1.5 }}
           className="text-center py-2 text-white/40 text-sm"
         >
-          © 2025 ChainPot. All rights reserved.
+          © 2026 ChainPot ·{' '}
+          <Link href="/terms" className="hover:text-white/80">Terms</Link> ·{' '}
+          <Link href="/risk" className="hover:text-white/80">Risks</Link> ·{' '}
+          <Link href="/privacy" className="hover:text-white/80">Privacy</Link>
         </motion.footer>
       </div>
 

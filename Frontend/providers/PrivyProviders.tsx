@@ -24,6 +24,7 @@ const privyConfig: PrivyClientConfig = {
     showWalletLoginFirst: false,
   },
   intl: { defaultCountry: 'IN' },
+  legal: { termsAndConditionsUrl: '/terms', privacyPolicyUrl: '/privacy' },
   // Every phone/email/social login gets an embedded signer that owns a smart wallet.
   embeddedWallets: { ethereum: { createOnLogin: 'users-without-wallets' }, showWalletUIs: false },
   defaultChain: baseSepolia,

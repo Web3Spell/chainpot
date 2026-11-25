@@ -8,6 +8,7 @@ import { Navbar } from '@/components/dashboard/navbar';
 import { useTheme } from '@/providers/theme-provider';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { clashDisplaySemibold } from '../ui/fonts';
+import { Faq } from '@/components/about/faq';
 
 /* ------------------------------------------------------------------ data */
 
@@ -101,36 +102,6 @@ const CONTRACTS = [
   { name: 'VRF provider', address: '0x02C179C8ddD881Ae61C50D06440a849EFCBEf504' },
 ];
 
-const FAQ = [
-  {
-    q: 'Is this a chit fund, a committee, a kitty?',
-    a: 'All of them. Different places call it different names (chit fund, committee, kitty, tontine, susu, hui), but the idea is the same: a group saves together and each member takes the whole pot once. ChainPot runs the bookkeeping on-chain so nobody has to hold the money.',
-  },
-  {
-    q: 'Who holds the money?',
-    a: 'Nobody. Payments go into an audited smart-contract vault. It only pays out to the member the rules select for that round, and only that member can withdraw it.',
-  },
-  {
-    q: 'What happens if someone misses a payment?',
-    a: 'Missing a payment costs that member their place in the circle. That is why ChainPot reminds you 2 days, 1 day and 2 hours before every due date, and why autopay exists.',
-  },
-  {
-    q: 'How does bidding work?',
-    a: 'In a bidding circle, members who need money early bid the amount they would accept. The lowest bid wins the pot, and the difference is shared among everyone else, so patient members are rewarded.',
-  },
-  {
-    q: 'Do I need crypto or a wallet?',
-    a: 'No. You sign in with your phone, email, Google or a passkey, and ChainPot sets up a smart account for you. Circles use USDC, a digital dollar, and you can add money with your local currency.',
-  },
-  {
-    q: 'Does ChainPot charge fees?',
-    a: 'Saving in a circle is free and gas is sponsored. The only cut today is 20% of the interest the vault earns, which goes to the ChainPot safety fund. Your contributions are never touched.',
-  },
-  {
-    q: 'Is it live?',
-    a: 'ChainPot is live on Base Sepolia testnet right now, so you can try a full circle with test money. Mainnet launches soon. Follow @_chainpot for the date.',
-  },
-];
 
 /* ------------------------------------------------------------- helpers */
 
@@ -697,30 +668,22 @@ export default function AboutPage() {
         </section>
 
         {/* ------------------------------------------------------- FAQ */}
-        <section className="grid gap-10 md:grid-cols-[1fr_1.6fr]">
+        <section id="faq" className="grid scroll-mt-24 gap-10 md:grid-cols-[1fr_2fr]">
           <Reveal>
             <Eyebrow>Questions</Eyebrow>
             <SectionTitle>Good to know.</SectionTitle>
             <motion.p variants={fadeUp} className="mt-4 text-cp-muted">
-              Something else on your mind? Ask us on{' '}
+              Every question we’ve been asked, answered straight. Still unsure? Ask us on{' '}
               <a href="https://x.com/_chainpot" target="_blank" rel="noreferrer" className="font-bold text-cp-accent underline-offset-4 hover:underline">
                 X @_chainpot
               </a>
               .
             </motion.p>
           </Reveal>
-          <Reveal className="space-y-3">
-            {FAQ.map((f) => (
-              <motion.details key={f.q} variants={fadeUp} className={`${card} group p-0 [&_summary::-webkit-details-marker]:hidden`}>
-                <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-bold text-cp-ink">
-                  {f.q}
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-cp-surface-muted text-lg transition-transform group-open:rotate-45">
-                    +
-                  </span>
-                </summary>
-                <p className="px-5 pb-5 text-sm leading-relaxed text-cp-muted">{f.a}</p>
-              </motion.details>
-            ))}
+          <Reveal>
+            <motion.div variants={fadeUp}>
+              <Faq cardClass={card} />
+            </motion.div>
           </Reveal>
         </section>
 
@@ -768,9 +731,12 @@ export default function AboutPage() {
             <span className={`text-cp-ink ${clashDisplaySemibold.className}`}>ChainPot</span> · Save together. Trust the
             code.
           </p>
-          <div className="flex gap-5">
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-2">
             <Link href="/" className="hover:text-cp-ink">Home</Link>
             <Link href="/pots" className="hover:text-cp-ink">Pots</Link>
+            <Link href="/terms" className="hover:text-cp-ink">Terms</Link>
+            <Link href="/risk" className="hover:text-cp-ink">Risks</Link>
+            <Link href="/privacy" className="hover:text-cp-ink">Privacy</Link>
             <a href="https://x.com/_chainpot" target="_blank" rel="noreferrer" className="hover:text-cp-ink">X</a>
           </div>
         </div>
