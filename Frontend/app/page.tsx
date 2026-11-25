@@ -25,7 +25,7 @@ export default function Home() {
   const navItems = [
     { id: 'home', label: 'Home', href: '/' },
     { id: 'pots', label: 'Pots', href: '/pots' },
-    { id: 'about', label: 'About', href: '/' },
+    { id: 'about', label: 'About', href: '/about' },
   ];
 
   const handleGetStarted = () => {
@@ -244,6 +244,7 @@ export default function Home() {
                 variants={buttonVariants}
                 whileHover="hover"
                 whileTap="tap"
+                onClick={() => router.push('/about')}
                 className="px-10 py-3 rounded-full bg-white/10 text-white font-semibold text-base border border-white/30 backdrop-blur-sm"
               >
                 Learn More
