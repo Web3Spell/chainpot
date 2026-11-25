@@ -40,9 +40,21 @@ Indexer `START_BLOCK` for mainnet: **62082159**.
 
 ## Ownership
 
-| Contract | Owner |
-|---|---|
-| All six contracts | deployer, **pending handover to the Safe** |
-| VRF subscription | deployer, **pending handover to the Safe** |
+Transferred from the deployer on 25 Nov 2026:
 
-Handover steps are in `docs/MAINNET_LAUNCH.md` §D.
+| Contract | Owner | Tx |
+|---|---|---|
+| MemberRegistryV4 | Safe | `0x34676a01cb3580bf5ceda4527800a74434e25aa52e3c8879059bdc6bb406c396` |
+| CompoundIntegratorV4 | Safe | `0x731f0ba208782a74f73a4f77800f65918d29f49eded4f27e5069781c190564ce` |
+| VaultV4 | Safe | `0x18b7cadc5343784399a1a9aae166c56f1b54ac16d11ba435dd09a18d11a1d115` |
+| CircleEngineV4 | Safe | `0x7052b61fd9789e3eac4ebe89791db3984098923964f2f6acddc52de10a7b7cd4` |
+| AuctionEngineV4 | Safe | `0xac54c9bbd7bd879f325bbb99b9e8ad177cb54a84a852fa9d5fca756c03145e4c` |
+| VRFProviderV4 | deployer → **Safe must call `acceptOwnership()`** (pending owner = Safe) | `0xc851b48431e315538285a1ab4998a83f5ac9a9fd282283b38bc9ff7ee67eb39b` |
+| VRF subscription | deployer → **Safe must call `acceptSubscriptionOwnerTransfer`** | `0xbe48580f520b3820103000607cf634651c97a44e5f4dd3fa3c45cbf49120a6a3` |
+
+### Safe batch to finish the handover (Transaction Builder, value 0)
+
+| # | To | Data |
+|---|---|---|
+| 1 | `0x78CC6E0AaFb256233d18459AC2E248C3303ceC8C` (VRFProviderV4) | `0x79ba5097` (`acceptOwnership()`) |
+| 2 | `0xd5D517aBE5cF79B7e95eC98dB0f0277788aFF634` (VRF coordinator) | `0xb2a7cac5ddc36ab2bf6c2f930893159952f06fc4212d2da0ab5d2d2dab01584490ce1f62` (`acceptSubscriptionOwnerTransfer(<sub id>)`) |
