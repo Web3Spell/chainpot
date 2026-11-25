@@ -18,6 +18,7 @@ interface NavbarProps {
 const NAV = [
   { label: 'My circles', href: '/dashboard' },
   { label: 'Explore', href: '/pots' },
+  { label: 'About', href: '/about' },
   { label: 'Start a circle', href: '/pots/create' },
 ];
 
@@ -35,7 +36,7 @@ export function Navbar({ isDarkMode }: NavbarProps) {
   const claim = useClaim();
 
   const link = (href: string) =>
-    `px-4 min-h-11 inline-flex items-center rounded-full text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent ${
+    `px-4 min-h-11 inline-flex shrink-0 items-center whitespace-nowrap rounded-full text-sm font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cp-accent ${
       isActive(href, pathname) ? 'bg-cp-ink text-cp-ink-inverse' : 'text-cp-ink hover:bg-cp-line-soft'
     }`;
 
@@ -80,7 +81,7 @@ export function Navbar({ isDarkMode }: NavbarProps) {
       </div>
 
       {/* Phones: the same three destinations, always reachable. */}
-      <nav aria-label="Main" className="md:hidden flex gap-1 px-4 pb-2 overflow-x-auto">
+      <nav aria-label="Main" className="md:hidden flex gap-1 px-4 pb-2 overflow-x-auto [scrollbar-width:none]">
         {NAV.map((item) => (
           <Link key={item.href} href={item.href} className={link(item.href)} aria-current={isActive(item.href, pathname) ? 'page' : undefined}>
             {item.label}
