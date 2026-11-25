@@ -5,7 +5,7 @@
 
 import { useCallback, useMemo } from 'react';
 import { useAccount } from 'wagmi';
-import { getIdentityToken, useMfaEnrollment, usePrivy } from '@privy-io/react-auth';
+import { getIdentityToken, useMfaEnrollment, usePrivy, useUser } from '@privy-io/react-auth';
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 import { useGrantAutopay } from './privy-autopay';
 import { clearIdentityToken, sharedIdentityToken } from './identity-token';
@@ -29,7 +29,12 @@ export function PrivyAccountBridge({ children }: { children: React.ReactNode }) 
   const passkeyProtected = !!user?.mfaMethods?.includes('passkey');
   // One shared token per user instead of one Privy call per API request (see identity-token.ts).
   const userId = user?.id;
-  const identityToken = useCallback(() => (userId ? sharedIdentityToken(getIdentityToken, userId) : Promise.resolve(null)), [userId]);
+  // Keyed by wallet too: a new account's first token can predate its smart wallet (see identity-token.ts).
+  const { refreshUser } = useUser();
+  const identityToken = useCallback(
+    () => (userId ? sharedIdentityToken(getIdentityToken, userId, Date.now, { wallet: smartAddress, refresh: refreshUser }) : Promise.resolve(null)),
+    [userId, smartAddress, refreshUser],
+  );
   const signOut = useCallback(() => {
     clearIdentityToken();
     void logout();

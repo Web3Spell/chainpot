@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { clearIdentityToken, jwtExpiryMs, sharedIdentityToken } from "./identity-token";
+import { clearIdentityToken, jwtExpiryMs, sharedIdentityToken, tokenHasSmartWallet } from "./identity-token";
 
 const jwt = (expSec: number) => `h.${btoa(JSON.stringify({ exp: expSec })).replace(/=+$/, "")}.s`;
 
@@ -39,5 +39,40 @@ describe("shared identity token", () => {
     const fetcher = vi.fn().mockRejectedValueOnce(new Error("429")).mockResolvedValueOnce(jwt(10_000));
     await expect(sharedIdentityToken(fetcher, "did:a", () => 0)).rejects.toThrow("429");
     await expect(sharedIdentityToken(fetcher, "did:a", () => 0)).resolves.toBe(jwt(10_000));
+  });
+
+  describe("smart wallet freshness (new accounts)", () => {
+    const W = "0x00000000000000000000000000000000000000A1";
+    const tok = (exp: number, wallet?: string) =>
+      `h.${btoa(JSON.stringify({ exp, linked_accounts: JSON.stringify(wallet ? [{ type: "smart_wallet", address: wallet }] : [{ type: "email", address: "a@b.c" }]) })).replace(/=+$/, "")}.s`;
+
+    it("reads the smart wallet from linked_accounts", () => {
+      expect(tokenHasSmartWallet(tok(10_000, W), W.toLowerCase())).toBe(true);
+      expect(tokenHasSmartWallet(tok(10_000), W)).toBe(false);
+    });
+
+    it("refreshes once and returns the new token when the first one predates the wallet", async () => {
+      const fetcher = vi.fn().mockResolvedValueOnce(tok(10_000)).mockResolvedValueOnce(tok(10_000, W));
+      const refresh = vi.fn(async () => undefined);
+      const t = await sharedIdentityToken(fetcher, "did:new", () => 1_000_000, { wallet: W, refresh });
+      expect(refresh).toHaveBeenCalledTimes(1);
+      expect(tokenHasSmartWallet(t!, W)).toBe(true);
+      await sharedIdentityToken(fetcher, "did:new", () => 1_000_000, { wallet: W, refresh });
+      expect(fetcher).toHaveBeenCalledTimes(2); // second call served from cache
+    });
+
+    it("never caches a token without the wallet", async () => {
+      const fetcher = vi.fn(async () => tok(10_000));
+      await sharedIdentityToken(fetcher, "did:new", () => 1_000_000, { wallet: W, refresh: async () => undefined });
+      await sharedIdentityToken(fetcher, "did:new", () => 1_000_000, { wallet: W, refresh: async () => undefined });
+      expect(fetcher).toHaveBeenCalledTimes(4);
+    });
+
+    it("drops a token cached before the wallet existed once the wallet is known", async () => {
+      const fetcher = vi.fn().mockResolvedValueOnce(tok(10_000)).mockResolvedValueOnce(tok(10_000, W));
+      await sharedIdentityToken(fetcher, "did:new", () => 1_000_000); // signed in, wallet not created yet
+      const t = await sharedIdentityToken(fetcher, "did:new", () => 1_000_000, { wallet: W });
+      expect(tokenHasSmartWallet(t!, W)).toBe(true);
+    });
   });
 });
