@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { NETWORK } from '@/config/network';
 import { Copy, Plus, Wallet } from 'lucide-react';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { useClaim, useWithdrawable } from '@/hooks/useVault';
@@ -70,9 +71,11 @@ export function BalanceCard() {
             {copied ? 'Address copied' : 'Add money (copy my address)'}
           </Button>
         )}
-        <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer" className="inline-flex items-center min-h-11 px-2 text-sm font-bold underline underline-offset-4 text-cp-accent">
-          Get test USDC
-        </a>
+        {NETWORK.faucet && (
+          <a href={NETWORK.faucet} target="_blank" rel="noreferrer" className="inline-flex items-center min-h-11 px-2 text-sm font-bold underline underline-offset-4 text-cp-accent">
+            Get test USDC
+          </a>
+        )}
       </div>
       {addMoneyOpen && <AddMoneySheet onClose={() => setAddMoneyOpen(false)} />}
     </Card>

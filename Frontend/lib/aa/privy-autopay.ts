@@ -6,14 +6,14 @@
 
 import { useCallback } from 'react';
 import { createPublicClient, createWalletClient, custom, http } from 'viem';
-import { baseSepolia } from 'viem/chains';
+import { CHAIN } from '@/config/chain';
 import { useWallets } from '@privy-io/react-auth';
 import { serializePermissionAccount } from '@zerodev/permissions';
 import { toEmptyECDSASigner } from '@zerodev/permissions/signers';
 import { transports } from '@/config/wagmi';
 import { ownerAccountWithAutopay, type AutopayScope } from './autopay';
 
-const publicClient = createPublicClient({ chain: baseSepolia, transport: transports[baseSepolia.id] ?? http() });
+const publicClient = createPublicClient({ chain: CHAIN, transport: transports[CHAIN.id] ?? http() });
 
 export function useGrantAutopay(smartWallet?: `0x${string}`) {
   const { wallets } = useWallets();
@@ -23,7 +23,7 @@ export function useGrantAutopay(smartWallet?: `0x${string}`) {
       if (!embedded || !smartWallet) throw new Error('Autopay needs a ChainPot account signed in with phone, email or passkey.');
       const owner = createWalletClient({
         account: embedded.address as `0x${string}`,
-        chain: baseSepolia,
+        chain: CHAIN,
         transport: custom(await embedded.getEthereumProvider()),
       });
       // Only the session key's address is needed here; its private key stays on the server.

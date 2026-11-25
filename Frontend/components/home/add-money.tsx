@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { IS_MAINNET as APP_ON_MAINNET } from '@/config/network';
 import { createPortal } from 'react-dom';
 import { Copy } from 'lucide-react';
 import { useChainPotAccount } from '@/lib/aa/account';
@@ -9,7 +10,8 @@ import { buildOnrampUrl, fiatForOnramp } from '@/lib/onramp';
 import { Button } from '@/components/ui/button';
 import { clashDisplaySemibold } from '@/app/ui/fonts';
 
-const IS_MAINNET = (process.env.NEXT_PUBLIC_ONRAMP_NETWORK ?? 'base') === 'base';
+// Buying real USDC only makes sense when the app itself runs on mainnet.
+const IS_MAINNET = APP_ON_MAINNET && (process.env.NEXT_PUBLIC_ONRAMP_NETWORK ?? 'base') === 'base';
 
 /** Local amounts matching roughly $10 / $25 / $50, so presets feel native in any currency. */
 function presets(rate: number | undefined): number[] {

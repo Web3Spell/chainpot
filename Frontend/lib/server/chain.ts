@@ -1,13 +1,14 @@
 import { createPublicClient, http } from "viem";
-import { baseSepolia } from "viem/chains";
+import { CHAIN } from "@/config/chain";
+import { serverRpcUrl } from "@/config/network";
 import { CONTRACT_CONFIG } from "@/config/hooksConf";
 import { PotStatus, parseCycle, parsePot, type Engine } from "@/lib/pot";
 import type { PotState } from "@/lib/reminders";
 
 const client = createPublicClient({
-  chain: baseSepolia,
+  chain: CHAIN,
   batch: { multicall: true },
-  transport: http(process.env.BASE_SEPOLIA_RPC_URL || process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC_URL || "https://base-sepolia-rpc.publicnode.com"),
+  transport: http(serverRpcUrl()),
 });
 
 /** The pot's current on-chain Merkle root, or undefined if the pot doesn't exist. */

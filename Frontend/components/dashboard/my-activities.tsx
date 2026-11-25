@@ -1,6 +1,7 @@
 'use client';
 
 import { Money } from '@/components/money';
+import { explorerTx } from '@/config/network';
 import { useChainPotAccount } from '@/lib/aa/account';
 import Link from 'next/link';
 import { useUserActivityEvents, type ActivityEvent } from '@/hooks/useUserActivityEvents';
@@ -105,7 +106,7 @@ export function MyActivities({ isDarkMode }: MyActivitiesProps) {
                     {formatDateTime(r.timestamp)}
                     {r.engine && r.potId && <> · {r.engine === 'circle' ? 'Community Circle' : 'Business ROSCA'} #{r.potId}</>}
                     {r.txHash && (
-                      <> · <a className="underline" href={`https://sepolia.basescan.org/tx/${r.txHash}`} target="_blank" rel="noreferrer">receipt</a></>
+                      <> · <a className="underline" href={explorerTx(r.txHash)} target="_blank" rel="noreferrer">receipt</a></>
                     )}
                   </p>
                 </div>

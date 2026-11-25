@@ -9,6 +9,7 @@ import { useTheme } from '@/providers/theme-provider';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { clashDisplaySemibold } from '../ui/fonts';
 import { Faq } from '@/components/about/faq';
+import { IS_MAINNET, NETWORK, explorerAddress } from '@/config/network';
 
 /* ------------------------------------------------------------------ data */
 
@@ -96,10 +97,10 @@ const TRUST = [
 ];
 
 const CONTRACTS = [
-  { name: 'CircleEngine', address: '0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db' },
-  { name: 'AuctionEngine', address: '0x347B063538219961a747192d0656c1b4e382Da2e' },
-  { name: 'Vault', address: '0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95' },
-  { name: 'VRF provider', address: '0x02C179C8ddD881Ae61C50D06440a849EFCBEf504' },
+  { name: 'CircleEngine', address: NETWORK.addresses.circleEngine },
+  { name: 'AuctionEngine', address: NETWORK.addresses.auctionEngine },
+  { name: 'Vault', address: NETWORK.addresses.vault },
+  { name: 'VRF provider', address: NETWORK.addresses.lottery },
 ];
 
 
@@ -644,12 +645,12 @@ export default function AboutPage() {
                 ))}
               </div>
               <div className="mt-10 rounded-2xl border border-current/20 p-5">
-                <p className="text-xs font-bold uppercase tracking-widest opacity-60">Check the contracts yourself · Base Sepolia</p>
+                <p className="text-xs font-bold uppercase tracking-widest opacity-60">Check the contracts yourself · {NETWORK.label}</p>
                 <ul className="mt-3 grid gap-2 sm:grid-cols-2">
                   {CONTRACTS.map((c) => (
                     <li key={c.address} className="min-w-0">
                       <a
-                        href={`https://sepolia.basescan.org/address/${c.address}`}
+                        href={explorerAddress(c.address)}
                         target="_blank"
                         rel="noreferrer"
                         className="group flex items-baseline gap-2 text-sm"
@@ -703,8 +704,9 @@ export default function AboutPage() {
                 Grab your group.
               </h2>
               <p className="relative mx-auto mt-4 max-w-xl text-lg text-cp-muted">
-                ChainPot is live on testnet. Start a circle with your people, try every step with test money, and
-                tell us what you think.
+                {IS_MAINNET
+                  ? 'ChainPot is live on Base. Start a circle with your people: real USDC, no gas fees, rules nobody can bend.'
+                  : 'ChainPot is live on testnet. Start a circle with your people, try every step with test money, and tell us what you think.'}
               </p>
               <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <button

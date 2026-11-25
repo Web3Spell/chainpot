@@ -2,14 +2,14 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { baseSepolia } from 'wagmi/chains';
+import { CHAIN } from '@/config/chain';
 import { PrivyProvider, type PrivyClientConfig } from '@privy-io/react-auth';
 import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
 import { WagmiProvider as PrivyWagmiProvider, createConfig } from '@privy-io/wagmi';
 import { transports } from '@/config/wagmi';
 import { PrivyAccountBridge } from '@/lib/aa/privy-account';
 
-const config = createConfig({ chains: [baseSepolia], transports });
+const config = createConfig({ chains: [CHAIN], transports });
 
 // Gas sponsorship (paymaster) and the bundler are configured per network in the Privy dashboard;
 // see docs/FRONTEND_UX_AA_PLAN.md → "Gas + signing setup".
@@ -27,8 +27,8 @@ const privyConfig: PrivyClientConfig = {
   legal: { termsAndConditionsUrl: '/terms', privacyPolicyUrl: '/privacy' },
   // Every phone/email/social login gets an embedded signer that owns a smart wallet.
   embeddedWallets: { ethereum: { createOnLogin: 'users-without-wallets' }, showWalletUIs: false },
-  defaultChain: baseSepolia,
-  supportedChains: [baseSepolia],
+  defaultChain: CHAIN,
+  supportedChains: [CHAIN],
 };
 
 export default function PrivyProviders({ appId, queryClient, children }: { appId: string; queryClient: QueryClient; children: React.ReactNode }) {

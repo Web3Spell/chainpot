@@ -1,5 +1,5 @@
 import { encodeFunctionData, erc20Abi, http, type Address } from "viem";
-import { baseSepolia } from "viem/chains";
+import { CHAIN } from "@/config/chain";
 import { privateKeyToAccount } from "viem/accounts";
 import { createPaymasterClient } from "viem/account-abstraction";
 import { createKernelAccountClient } from "@zerodev/sdk";
@@ -29,7 +29,7 @@ export async function payWithSessionKey(m: { engine: Engine; potId: bigint; seri
   );
   const kernel = createKernelAccountClient({
     account,
-    chain: baseSepolia,
+    chain: CHAIN,
     client: serverPublicClient as never,
     bundlerTransport: http(bundlerUrl),
     ...(paymasterUrl ? { paymaster: createPaymasterClient({ transport: http(paymasterUrl) }) } : {}),

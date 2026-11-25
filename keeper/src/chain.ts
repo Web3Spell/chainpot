@@ -1,5 +1,9 @@
 import { createPublicClient, http, type Address, type PublicClient } from "viem";
-import { baseSepolia } from "viem/chains";
+import { base, baseSepolia } from "viem/chains";
+import { NETWORK } from "../../Frontend/config/network.ts";
+
+/** Chain picked by CHAIN / NEXT_PUBLIC_CHAIN (see Frontend/config/network.ts). */
+export const CHAIN = NETWORK.chainId === base.id ? base : baseSepolia;
 import { CONTRACT_CONFIG } from "../../Frontend/config/hooksConf.ts";
 import { CycleStatus, PotStatus, parseCycle, parsePot, parsePotConfig, type Engine } from "../../Frontend/lib/pot.ts";
 import type { PotSnapshot } from "./plan.ts";
@@ -17,7 +21,7 @@ export const vaultAbi = CONTRACT_CONFIG.abis.vault;
 export const vaultAddress = CONTRACT_CONFIG.addresses.vault as Address;
 
 export function makePublicClient(rpcUrl: string): PublicClient {
-  return createPublicClient({ chain: baseSepolia, transport: http(rpcUrl), batch: { multicall: true } }) as PublicClient;
+  return createPublicClient({ chain: CHAIN, transport: http(rpcUrl), batch: { multicall: true } }) as PublicClient;
 }
 
 /** Read every non-completed pot (and completed ones with unreleased slots) on both engines. */
