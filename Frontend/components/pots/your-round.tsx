@@ -1,6 +1,7 @@
 'use client';
 
 import { useChainPotAccount } from '@/lib/aa/account';
+import { NETWORK } from '@/config/network';
 import { useState } from 'react';
 import { formatUnits, parseUnits } from 'viem';
 import { engineContract, useCycle, useMemberState, usePot } from '@/hooks/useRoscaEngine';
@@ -123,7 +124,11 @@ function PayStep({ engine, potId, amount, deadline, isDarkMode }: { engine: Engi
         {insufficient && (
           <p className="text-sm mt-2 font-medium text-cp-danger">
             You need <Money usdc={amount - balance!} /> more.{' '}
-            <a href="https://faucet.circle.com/" target="_blank" rel="noreferrer" className="underline">Get test USDC</a>
+            {NETWORK.faucet ? (
+              <a href={NETWORK.faucet} target="_blank" rel="noreferrer" className="underline">Get test USDC</a>
+            ) : (
+              'Add money from your balance card.'
+            )}
           </p>
         )}
         {pay.errorMessage && <p className="text-sm mt-2 font-medium text-cp-danger">{pay.errorMessage}</p>}

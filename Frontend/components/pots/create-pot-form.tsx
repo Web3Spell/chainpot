@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { BETA_MAX_MEMBERS, BETA_MAX_USD_PER_ROUND } from '@/config/network';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check } from 'lucide-react';
 import { parseEventLogs, parseUnits } from 'viem';
@@ -88,6 +89,7 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
     0: name.trim().length < 1 ? 'Give your circle a name' : undefined,
     1: amountUnits < BigInt(0) ? 'Enter a valid amount'
       : amountUnits < MIN_AMOUNT_PER_CYCLE ? 'Minimum is $1 per round'
+      : BETA_MAX_USD_PER_ROUND && amountUnits > BigInt(BETA_MAX_USD_PER_ROUND) * BigInt(1_000_000) ? `During the beta the maximum is $${BETA_MAX_USD_PER_ROUND} per round`
       : !(schedule.every > 0) ? 'Choose how often'
       : !(schedule.pay >= MIN_PAYMENT_WINDOW) ? 'Members need at least 1 day to pay'
       : schedule.pay >= schedule.every ? 'Time to pay must be shorter than the round'
@@ -98,7 +100,7 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
     3: mode === 'link'
       ? (n < MIN_MEMBERS || n > MAX_MEMBERS ? `Choose ${MIN_MEMBERS}–${MAX_MEMBERS} people` : undefined)
       : roster.invalid.length ? `Not valid addresses: ${roster.invalid.slice(0, 2).join(', ')}${roster.invalid.length > 2 ? '…' : ''}`
-      : n < MIN_MEMBERS ? `A circle needs at least ${MIN_MEMBERS} members` : n > MAX_MEMBERS ? `At most ${MAX_MEMBERS} members` : undefined,
+      : n < MIN_MEMBERS ? `A circle needs at least ${MIN_MEMBERS} members` : n > Math.min(MAX_MEMBERS, BETA_MAX_MEMBERS) ? `At most ${Math.min(MAX_MEMBERS, BETA_MAX_MEMBERS)} members${BETA_MAX_MEMBERS < MAX_MEMBERS ? ' during the beta' : ''}` : undefined,
     4: isRegistered === true && canCreate === false ? 'Your account can’t create circles right now' : undefined,
   };
   const firstInvalid = [0, 1, 2, 3].find((i) => errors[i]);
@@ -227,7 +229,7 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
                 <input id="amount" className={`${field} pl-8`} inputMode="decimal" autoComplete="off" placeholder="50" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} aria-describedby="amount-hint" />
               </div>
               <p id="amount-hint" className="text-xs text-cp-muted mt-2">
-                US dollars (USDC){amountUnits > BigInt(0) ? ` · ${money(amountUnits)}` : ''} · minimum $1
+                US dollars (USDC){amountUnits > BigInt(0) ? ` · ${money(amountUnits)}` : ''} · minimum $1{BETA_MAX_USD_PER_ROUND ? `, maximum $${BETA_MAX_USD_PER_ROUND} during the beta` : ''}
               </p>
             </div>
             <fieldset>

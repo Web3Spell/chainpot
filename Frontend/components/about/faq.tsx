@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
+import { BETA_MAX_MEMBERS, BETA_MAX_USD_PER_ROUND, IS_MAINNET } from '@/config/network';
 
 type QA = { q: string; a: React.ReactNode };
 type Group = { id: string; label: string; items: QA[] };
@@ -34,7 +35,9 @@ export const FAQ_GROUPS: Group[] = [
       },
       {
         q: 'Is ChainPot live?',
-        a: 'It is live on the Base Sepolia testnet, where you can run a full circle with test money that has no value. Mainnet, with real USDC, is coming soon. Follow @_chainpot for the date.',
+        a: IS_MAINNET
+          ? 'Yes. ChainPot runs on Base mainnet with real USDC, in a guarded beta: circles are capped in size and amount while we grow. Follow @_chainpot for updates.'
+          : 'It is live on the Base Sepolia testnet, where you can run a full circle with test money that has no value. Mainnet, with real USDC, is coming soon. Follow @_chainpot for the date.',
       },
     ],
   },
@@ -48,7 +51,7 @@ export const FAQ_GROUPS: Group[] = [
       },
       {
         q: 'How many people can be in a circle, and how much can we save?',
-        a: 'Between 2 and 100 members, from 1 USDC per round. Each round must give members at least 1 day to pay. During the beta we may set lower limits in the app.',
+        a: `Between 2 and ${BETA_MAX_MEMBERS} members, from 1 USDC${BETA_MAX_USD_PER_ROUND ? ` up to ${BETA_MAX_USD_PER_ROUND} USDC` : ''} per round. Each round must give members at least 1 day to pay.${IS_MAINNET ? ' These are beta limits and will be raised over time.' : ''}`,
       },
       {
         q: 'Does the creator have to be a member?',

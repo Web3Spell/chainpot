@@ -9,14 +9,14 @@
 
 import { createWalletClient, http, parseGwei, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { baseSepolia } from "viem/chains";
-import { auctionAbi, engineAbi, engineAddress, loadBalances, loadSnapshots, makePublicClient, vaultAbi, vaultAddress } from "./chain.ts";
+import { IS_MAINNET, NETWORK } from "../../Frontend/config/network.ts";
+import { CHAIN, auctionAbi, engineAbi, engineAddress, loadBalances, loadSnapshots, makePublicClient, vaultAbi, vaultAddress } from "./chain.ts";
 import { planClaims, planPot, type KeeperAction } from "./plan.ts";
 import { CRON_PATHS, cronDue, pingCron } from "./cron.ts";
 
 const env = process.env;
 const DRY_RUN = env.DRY_RUN !== "false";
-const RPC_URL = env.KEEPER_RPC_URL ?? env.BASE_SEPOLIA_RPC_URL ?? "https://base-sepolia-rpc.publicnode.com";
+const RPC_URL = env.KEEPER_RPC_URL ?? (IS_MAINNET ? undefined : env.BASE_SEPOLIA_RPC_URL) ?? NETWORK.defaultRpc;
 const INTERVAL_SEC = Number(env.INTERVAL_SEC ?? 60);
 const CLAIM_MIN = BigInt(env.CLAIM_MIN_USDC_UNITS ?? 1_000_000); // 1 USDC: don't spend gas pushing dust
 const CLAIM_OPT_OUT = new Set((env.CLAIM_OPT_OUT ?? "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean));
@@ -49,7 +49,7 @@ const account = !DRY_RUN
         throw new Error("DRY_RUN=false requires KEEPER_PRIVATE_KEY");
       })()
   : undefined;
-const wallet = account ? createWalletClient({ account, chain: baseSepolia, transport: http(RPC_URL) }) : undefined;
+const wallet = account ? createWalletClient({ account, chain: CHAIN, transport: http(RPC_URL) }) : undefined;
 // Dry runs still simulate from a real-looking sender so permissionless checks pass.
 const simulateFrom: Address = account?.address ?? ((env.KEEPER_ADDRESS as Address) || "0x000000000000000000000000000000000000dEaD");
 
@@ -123,7 +123,7 @@ async function runCron() {
 }
 
 async function main() {
-  log("start", { dryRun: DRY_RUN, rpc: new URL(RPC_URL).host, sender: simulateFrom, intervalSec: INTERVAL_SEC, cron: APP_URL && CRON_SECRET ? `${new URL(APP_URL).host} every ${CRON_EVERY_SEC}s` : "off" });
+  log("start", { network: NETWORK.id, dryRun: DRY_RUN, rpc: new URL(RPC_URL).host, sender: simulateFrom, intervalSec: INTERVAL_SEC, cron: APP_URL && CRON_SECRET ? `${new URL(APP_URL).host} every ${CRON_EVERY_SEC}s` : "off" });
   if (process.argv.includes("--once")) return tick();
   for (;;) {
     try {

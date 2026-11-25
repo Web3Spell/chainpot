@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { inviteRoot } from "@/lib/invite";
+import { BETA_MAX_MEMBERS, BETA_MAX_USD_PER_ROUND } from "@/config/network";
 import { MAX_MEMBERS, MIN_AMOUNT_PER_CYCLE, MIN_BIDDING_PHASE, MIN_MEMBERS, MIN_PAYMENT_WINDOW, type Engine } from "@/lib/pot";
 import type { Query } from "./db";
 import type { PrivyIdentity } from "./auth";
@@ -60,7 +61,9 @@ export function validateTerms(input: Record<string, unknown>): DraftTerms {
   const pay = int("paymentWindow");
   const bid = engine === "auction" ? int("biddingWindow") : 0;
   if (amount < MIN_AMOUNT_PER_CYCLE) throw new DraftError("minimum is $1 per round");
-  if (memberCount < MIN_MEMBERS || memberCount > MAX_MEMBERS) throw new DraftError(`a circle needs ${MIN_MEMBERS}–${MAX_MEMBERS} members`);
+  if (BETA_MAX_USD_PER_ROUND && amount > BigInt(BETA_MAX_USD_PER_ROUND) * BigInt(1_000_000)) throw new DraftError(`maximum is $${BETA_MAX_USD_PER_ROUND} per round during the beta`);
+  const maxMembers = Math.min(MAX_MEMBERS, BETA_MAX_MEMBERS);
+  if (memberCount < MIN_MEMBERS || memberCount > maxMembers) throw new DraftError(`a circle needs ${MIN_MEMBERS}–${maxMembers} members`);
   if (pay < MIN_PAYMENT_WINDOW || pay >= cycle) throw new DraftError("time to pay must be at least 1 day and shorter than the round");
   if (engine === "auction" && (bid < pay + MIN_BIDDING_PHASE || bid >= cycle)) throw new DraftError("bidding must close 1h+ after payments and before the round ends");
   return { name, emoji, engine, amountPerCycle: amount, memberCount, cycleDuration: cycle, paymentWindow: pay, biddingWindow: bid };

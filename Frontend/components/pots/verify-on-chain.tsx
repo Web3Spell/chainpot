@@ -4,8 +4,9 @@ import { ExternalLink } from 'lucide-react';
 import { CONTRACT_CONFIG } from '@/config/hooksConf';
 import { usePot } from '@/hooks/useRoscaEngine';
 import type { Engine } from '@/lib/pot';
+import { NETWORK } from '@/config/network';
 
-const SCAN = 'https://sepolia.basescan.org/address/';
+const SCAN = `${NETWORK.explorer}/address/`;
 
 /** For the curious: the contracts holding this circle's money and rules. */
 export function VerifyOnChain({ engine, potId }: { engine: Engine; potId: bigint; isDarkMode?: boolean }) {

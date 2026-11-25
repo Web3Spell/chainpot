@@ -1,15 +1,9 @@
 // V4.1 security fixes — ABIs regenerated from patched v4 contracts.
-// Addresses updated to the latest Base Sepolia deployment (2026-08-26).
 
-export const CONTRACT_ADDRESSES = {
-  memberRegistry: "0x5860dDEE64256Cf77924209b1eEEb4ddf92B3395",
-  circleEngine: "0x8EA7cdD4Ae50FC8BF99a76eD182F0665710D81Db",
-  auctionEngine: "0x347B063538219961a747192d0656c1b4e382Da2e",
-  vault: "0x3D5dd83A9977BBEA876F9380cfd56A6B9E064C95",
-  lottery: "0x02C179C8ddD881Ae61C50D06440a849EFCBEf504",
-  compoundIntegrator: "0xa530364AfcEFeB70938Ec2D1aDdc1f64410610B6",
-  usdc: "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
-};
+import { NETWORK } from './network';
+
+// Addresses come from config/network.ts (NEXT_PUBLIC_CHAIN selects testnet or mainnet).
+export const CONTRACT_ADDRESSES = NETWORK.addresses;
 
 export const CONTRACT_ABIS = {
   memberRegistry: [
