@@ -30,7 +30,7 @@ export async function PUT(req: Request) {
   if (!pot) return NextResponse.json({ error: "bad pot id" }, { status: 400 });
   const creator = await readPotCreator(pot.engine, pot.potId);
   if (!creator) return NextResponse.json({ error: "pot not found" }, { status: 404 });
-  if (creator.toLowerCase() !== auth.identity.smartWallet?.toLowerCase()) {
+  if (creator.toLowerCase() !== (auth.identity.account ?? auth.identity.smartWallet)?.toLowerCase()) {
     return NextResponse.json({ error: "only the pot's creator can name it" }, { status: 403 });
   }
   try {

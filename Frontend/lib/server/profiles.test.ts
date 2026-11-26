@@ -43,7 +43,7 @@ beforeAll(async () => {
 describe("Privy identity token", () => {
   it("accepts a valid token and reads verified contacts + smart wallet", async () => {
     const id = await verifyIdentityToken(await token({ linked_accounts: linked }), { appId: APP_ID, key: keys.publicKey });
-    expect(id).toEqual({ userId: "did:privy:alice", smartWallet: WALLET, email: "alice@example.com", phone: "+919876543210" });
+    expect(id).toEqual({ userId: "did:privy:alice", smartWallet: WALLET, externalWallets: [], email: "alice@example.com", phone: "+919876543210" });
   });
 
   it("rejects wrong audience, issuer, signer or a missing token", async () => {

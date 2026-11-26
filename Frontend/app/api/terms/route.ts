@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getQuery } from "@/lib/server/db";
-import { AuthError, identityTokenFrom, verifyIdentityToken } from "@/lib/server/auth";
+import { AuthError, identityFromRequest } from "@/lib/server/auth";
 import { limitResponse, rateLimit, readJson } from "@/lib/server/limits";
 import { hasAccepted, recordAcceptance, TermsError } from "@/lib/server/terms";
 
@@ -13,7 +13,7 @@ async function handle(req: Request, write: boolean) {
   if (!query) return NextResponse.json({ error: "storage unavailable" }, { status: 503 });
   let identity;
   try {
-    identity = await verifyIdentityToken(identityTokenFrom(req));
+    identity = await identityFromRequest(req);
   } catch (err) {
     const status = err instanceof AuthError && err.message === "Privy is not configured" ? 503 : 401;
     return NextResponse.json({ error: (err as Error).message }, { status });

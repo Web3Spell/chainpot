@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { getQuery, type Query } from "./db";
-import { AuthError, identityTokenFrom, verifyIdentityToken, type PrivyIdentity } from "./auth";
+import { AuthError, identityFromRequest, type PrivyIdentity } from "./auth";
 import { limitResponse, rateLimit } from "./limits";
 
 /** DB + verified Privy identity for a request, or the error response to return. */
@@ -9,7 +9,7 @@ export async function requireUser(req: Request): Promise<{ query: Query; identit
   const query = getQuery();
   if (!query) return NextResponse.json({ error: "storage unavailable" }, { status: 503 });
   try {
-    return { query, identity: await verifyIdentityToken(identityTokenFrom(req)) };
+    return { query, identity: await identityFromRequest(req) };
   } catch (err) {
     const status = err instanceof AuthError && err.message === "Privy is not configured" ? 503 : 401;
     return NextResponse.json({ error: (err as Error).message }, { status });
