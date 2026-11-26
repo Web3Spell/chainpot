@@ -107,4 +107,13 @@ describe("invite-by-link drafts", () => {
     await cancelDraft(query, org, d.id);
     await expect(getDraftByToken(query, d.token)).rejects.toMatchObject({ status: 404 });
   });
+
+  it("someone signed in with an outside wallet (e.g. Rabby) takes a seat with that wallet", async () => {
+    const rabby = "0x00000000000000000000000000000000000000Rb".replace("Rb", "be") as `0x${string}`;
+    const { token: t2, id: id2 } = await createDraft(query, org, terms);
+    const view = await acceptDraft(query, { userId: "did:privy:rabby", externalWallets: [rabby], account: rabby }, t2);
+    expect(view.seatsTaken).toBe(2);
+    const mine = (await listMyDrafts(query, { userId: "did:privy:rabby", account: rabby })).find((d) => d.id === id2);
+    expect(mine?.members).toContain(rabby.toLowerCase());
+  });
 });

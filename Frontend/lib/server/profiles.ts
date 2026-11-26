@@ -85,7 +85,7 @@ export async function saveProfile(query: Query, identity: PrivyIdentity, input: 
        currency     = coalesce(excluded.currency, profiles.currency),
        display_name = coalesce(excluded.display_name, profiles.display_name),
        updated_at   = now()`,
-    [identity.userId, identity.smartWallet?.toLowerCase() ?? null, country?.code ?? null, country?.currency ?? null, (input.displayName as string | undefined) ?? null],
+    [identity.userId, (identity.account ?? identity.smartWallet)?.toLowerCase() ?? null, country?.code ?? null, country?.currency ?? null, (input.displayName as string | undefined) ?? null],
   );
 
   // Contact rows mirror the verified identity for enabled channels only.

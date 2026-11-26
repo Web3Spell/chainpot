@@ -31,7 +31,7 @@ export async function recordAcceptance(
     if (!Number.isNaN(t) && t <= now && now - t <= MAX_SKEW_MS) acceptedAt = t;
   }
 
-  const address = identity.smartWallet?.toLowerCase() ?? null;
+  const address = (identity.account ?? identity.smartWallet)?.toLowerCase() ?? null;
   const rows = await query<{ accepted_at: string | Date }>(
     `insert into terms_acceptances (user_id, version, address, accepted_at, user_agent)
      values ($1, $2, $3, $4, $5)

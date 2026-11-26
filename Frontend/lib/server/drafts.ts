@@ -70,16 +70,18 @@ export function validateTerms(input: Record<string, unknown>): DraftTerms {
 }
 
 async function ensureProfile(query: Query, identity: PrivyIdentity) {
-  // A brand-new account's first token can predate its smart wallet; the client refreshes and retries.
-  if (!identity.smartWallet) {
-    throw new DraftError("Your ChainPot account is still being set up. Wait a few seconds and try again. (Signed in with an outside wallet? Use phone, email or Google instead.)", 401);
+  // Smart wallet, or a Privy-verified outside wallet (Rabby, MetaMask…). A brand-new phone/email account's
+  // first token can predate its smart wallet; the client refreshes and retries.
+  const account = identity.account ?? identity.smartWallet;
+  if (!account) {
+    throw new DraftError("Your ChainPot account is still being set up. Wait a few seconds and try again.", 401);
   }
   await query(
     `insert into profiles (user_id, address) values ($1, $2)
      on conflict (user_id) do update set address = coalesce(profiles.address, excluded.address)`,
-    [identity.userId, identity.smartWallet.toLowerCase()],
+    [identity.userId, account.toLowerCase()],
   );
-  return identity.smartWallet.toLowerCase();
+  return account.toLowerCase();
 }
 
 type Row = {
@@ -158,7 +160,7 @@ async function creatorDraft(query: Query, identity: PrivyIdentity, id: string) {
 export async function removeDraftMember(query: Query, identity: PrivyIdentity, id: string, address: string) {
   const r = await creatorDraft(query, identity, id);
   if (r.status !== "open") throw new DraftError("can't change members while the circle is being created", 409);
-  if (address.toLowerCase() === identity.smartWallet?.toLowerCase()) throw new DraftError("you can't remove yourself; cancel the draft instead");
+  if (address.toLowerCase() === (identity.account ?? identity.smartWallet)?.toLowerCase()) throw new DraftError("you can't remove yourself; cancel the draft instead");
   await query(`delete from draft_members where draft_id = $1 and address = $2`, [id, address.toLowerCase()]);
 }
 
@@ -204,7 +206,7 @@ export async function markDeployed(query: Query, identity: PrivyIdentity, id: st
   if (r.engine !== engine) throw new DraftError("pot is on a different engine");
   const members = (await query<{ address: `0x${string}` }>(`select address from draft_members where draft_id = $1`, [id])).map((m) => m.address);
   const checks: [boolean, string][] = [
-    [pot.creator.toLowerCase() === identity.smartWallet?.toLowerCase(), "pot was created by a different account"],
+    [pot.creator.toLowerCase() === (identity.account ?? identity.smartWallet)?.toLowerCase(), "pot was created by a different account"],
     [pot.merkleRoot.toLowerCase() === inviteRoot(members).toLowerCase(), "pot's members don't match the accepted list"],
     [pot.expectedMembers === members.length, "member count doesn't match"],
     [pot.amountPerCycle === BigInt(r.amount_per_cycle), "amount doesn't match"],
