@@ -1,5 +1,6 @@
 'use client';
 
+import { AccountAccessButton } from '@/components/aa/account-access-button';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
@@ -121,7 +122,7 @@ export function PotHeader({ potId, engine }: PotHeaderProps) {
   let joinCta: React.ReactNode = null;
   if (isOpen && !member.isMember) {
     const btn = buttonClass('primary', 'lg');
-    if (!address) joinCta = <button type="button" onClick={account.login} className={btn}>Sign in to join</button>;
+    if (!address) joinCta = <AccountAccessButton size="lg">Sign in to join</AccountAccessButton>;
     else if (isFull) joinCta = <p className="text-sm font-medium text-cp-muted">This circle is full.</p>;
     else if (!inviteList) joinCta = <p className="text-sm font-medium text-cp-muted">{inviteLoading ? 'Checking the invite list…' : 'Open the invite link the creator shared with you to join.'}</p>;
     else if (!onList || !proof) joinCta = <p className="text-sm font-bold text-cp-danger">This account isn&apos;t on the invite list. Ask the person who invited you to add it.</p>;

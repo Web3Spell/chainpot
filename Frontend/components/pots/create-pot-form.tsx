@@ -5,6 +5,7 @@ import { BETA_MAX_MEMBERS, BETA_MAX_USD_PER_ROUND } from '@/config/network';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Check } from 'lucide-react';
 import { parseEventLogs, parseUnits } from 'viem';
+import { AccountAccessButton } from '@/components/aa/account-access-button';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { apiFetch } from '@/lib/aa/api';
 import { contractCall, useContractAction } from '@/hooks/useContractAction';
@@ -341,7 +342,7 @@ export function CreatePotForm({}: { isDarkMode: boolean }) {
           {step < STEPS.length - 1 ? (
             <Button onClick={() => !errors[step] && setStep(step + 1)} disabled={!!errors[step]}>Continue</Button>
           ) : !account.isConnected ? (
-            <Button size="lg" onClick={account.login}>Sign in to create</Button>
+            <AccountAccessButton size="lg">Sign in to create</AccountAccessButton>
           ) : mode === 'link' ? (
             <Button size="lg" onClick={() => void createLink()} disabled={drafting || firstInvalid !== undefined}>
               {drafting ? 'Creating link…' : 'Create invite link'}

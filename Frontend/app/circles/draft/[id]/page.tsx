@@ -7,6 +7,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { parseEventLogs } from 'viem';
 import { Navbar } from '@/components/dashboard/navbar';
 import { useTheme } from '@/providers/theme-provider';
+import { AccountAccessButton } from '@/components/aa/account-access-button';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { apiFetch } from '@/lib/aa/api';
 import { useMyDrafts } from '@/hooks/useDrafts';
@@ -149,7 +150,7 @@ export default function DraftPage() {
   );
 
   if (!account.isConnected) {
-    return shell(<Card><EmptyState icon={Users} title="Sign in to see this circle" body="Drafts are visible to the organizer and people who accepted." action={<Button onClick={account.login}>Sign in</Button>} /></Card>);
+    return shell(<Card><EmptyState icon={Users} title={account.access === "signed-out" ? "Sign in to see this circle" : "Access your circle"} body="Drafts are visible to the organizer and people who accepted." action={<AccountAccessButton />} /></Card>);
   }
   if (drafts.isLoading) return shell(<Skeleton className="h-96" />);
   if (!d) {
