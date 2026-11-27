@@ -14,7 +14,7 @@ export function AccountAccessButton({ children = 'Sign in', ...props }: Componen
     case 'wallet-unavailable':
       return (
         <div className="flex flex-wrap items-center gap-2">
-          <span role="status" className="text-sm text-cp-muted">Signed in. Wallet unavailable.</span>
+          <span role="status" className="text-sm text-cp-muted">Your ChainPot account couldn’t load. Try signing out and back in.</span>
           <Button {...props} onClick={account.logout}>Sign out</Button>
         </div>
       );

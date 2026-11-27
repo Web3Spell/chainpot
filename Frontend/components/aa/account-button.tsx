@@ -52,13 +52,17 @@ function PrivyAccountButton({ isDarkMode }: { isDarkMode?: boolean }) {
   return (
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen((o) => !o)} className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 max-w-[32vw] sm:max-w-none min-w-0 shrink ${solid}`} aria-haspopup="menu" aria-expanded={open}>
-        <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-        <span className="truncate">{account.label ?? (account.address ? shortAddress(account.address) : 'Signed in')}</span>
+        <span className={`w-2 h-2 rounded-full shrink-0 ${account.isConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
+        <span className="truncate">{account.address ? account.label ?? shortAddress(account.address) : account.reconnectWallet ? 'Wallet disconnected' : 'Account setup'}</span>
       </button>
       {open && (
         <div role="menu" className="absolute right-0 mt-2 w-72 rounded-2xl bg-white text-black shadow-2xl border border-black/10 p-2 z-50">
           <div className="px-3 py-2 text-xs text-gray-500">
-            {account.address ? (account.mode === 'smart' ? 'Your ChainPot account' : 'Connected wallet') : 'Signed in. Wallet unavailable.'}
+            {account.address
+              ? (account.mode === 'smart' ? 'Your ChainPot account' : 'Connected wallet')
+              : account.reconnectWallet
+                ? 'Reconnect the wallet you used to sign in.'
+                : 'Your ChainPot account couldn’t load. Try signing out and back in.'}
             {account.address && <div className="font-mono text-black text-[11px] break-all mt-1">{account.address}</div>}
           </div>
           {account.reconnectWallet && (

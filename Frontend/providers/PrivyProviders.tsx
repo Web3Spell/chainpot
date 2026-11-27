@@ -8,8 +8,16 @@ import { SmartWalletsProvider } from '@privy-io/react-auth/smart-wallets';
 import { WagmiProvider as PrivyWagmiProvider, createConfig } from '@privy-io/wagmi';
 import { transports } from '@/config/wagmi';
 import { PrivyAccountBridge } from '@/lib/aa/privy-account';
+import { linkedEvmWallets, selectSessionWallet } from '@/lib/aa/session';
 
 const config = createConfig({ chains: [CHAIN], transports });
+const restoreSessionWallet: NonNullable<React.ComponentProps<typeof PrivyWagmiProvider>['setActiveWalletForWagmi']> = ({ wallets, user }) => {
+  const { current, connections } = config.state;
+  const activeAddress = current ? connections.get(current)?.accounts[0] : undefined;
+  // Privy's default wagmi restore depends on cached connector state. Resolve it from the
+  // authenticated user's live wallets so reopened browsers can recover the same signer.
+  return selectSessionWallet(wallets, linkedEvmWallets(user), activeAddress, user?.wallet?.address);
+};
 
 // Gas sponsorship (paymaster) and the bundler are configured per network in the Privy dashboard;
 // see docs/FRONTEND_UX_AA_PLAN.md → "Gas + signing setup".
@@ -36,7 +44,7 @@ export default function PrivyProviders({ appId, queryClient, children }: { appId
     <PrivyProvider appId={appId} config={privyConfig}>
       <SmartWalletsProvider>
         <QueryClientProvider client={queryClient}>
-          <PrivyWagmiProvider config={config}>
+          <PrivyWagmiProvider config={config} setActiveWalletForWagmi={restoreSessionWallet}>
             <PrivyAccountBridge>{children}</PrivyAccountBridge>
           </PrivyWagmiProvider>
         </QueryClientProvider>

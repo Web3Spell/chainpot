@@ -10,7 +10,7 @@ import { useSmartWallets } from '@privy-io/react-auth/smart-wallets';
 import { useGrantAutopay } from './privy-autopay';
 import { clearIdentityToken, sharedIdentityToken } from './identity-token';
 import { AccountContext, SPONSORED, encodeCall, useEoaSendCalls, type ChainPotAccount, type ContractCall } from './account';
-import { accountAccess } from './session';
+import { accountAccess, linkedEvmWallets } from './session';
 
 // ---- Smart-account mode (Privy) ----
 
@@ -24,10 +24,8 @@ export function PrivyAccountBridge({ children }: { children: React.ReactNode }) 
   const { address: wagmiAddress, status } = useAccount();
   const eoaSend = useEoaSendCalls();
 
-  const linkedExternalWallets = user?.linkedAccounts
-    .filter((account) => account.type === 'wallet')
-    .filter((wallet) => wallet.chainType === 'ethereum' && wallet.walletClientType !== 'privy');
-  const externalAddress = status === 'connected' && linkedExternalWallets?.some(
+  const linkedExternalWallets = linkedEvmWallets(user).filter((wallet) => wallet.walletClientType !== 'privy');
+  const externalAddress = status === 'connected' && linkedExternalWallets.some(
     (wallet) => wallet.address.toLowerCase() === wagmiAddress?.toLowerCase(),
   ) ? wagmiAddress : undefined;
   const smartAddress = (authenticated ? user?.smartWallet?.address ?? client?.account?.address : undefined) as `0x${string}` | undefined;
@@ -36,13 +34,15 @@ export function PrivyAccountBridge({ children }: { children: React.ReactNode }) 
   const access = accountAccess({
     authReady: ready, authenticated, address, walletsReady,
     reconnecting: status === 'connecting' || status === 'reconnecting',
-    hasExternalWallet: !!linkedExternalWallets?.length,
+    hasExternalWallet: linkedExternalWallets.length > 0,
   });
   const signIn = useCallback(() => {
     if (access === 'signed-out') login();
   }, [access, login]);
   const reconnectWallet = useCallback(() => {
-    if (access === 'reconnect') connectWallet();
+    if (access === 'reconnect') {
+      connectWallet({ walletChainType: 'ethereum-only', description: 'Connect the wallet you previously used to sign in to ChainPot.' });
+    }
   }, [access, connectWallet]);
   const grantAutopay = useGrantAutopay(smartAddress);
   const label = user?.email?.address ?? user?.phone?.number ?? user?.google?.email ?? undefined;
