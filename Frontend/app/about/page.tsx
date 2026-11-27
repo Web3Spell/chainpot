@@ -388,7 +388,8 @@ export default function AboutPage() {
 
   const start = () => {
     setWantsDashboard(true);
-    if (!account.isConnected) account.login();
+    if (account.access === 'signed-out') account.login();
+    if (account.access === 'reconnect' || account.access === 'wallet-unavailable') router.push('/dashboard');
   };
 
   return (
@@ -424,6 +425,7 @@ export default function AboutPage() {
             <motion.div variants={fadeUp} className="mt-8 flex flex-col gap-3 sm:flex-row">
               <button
                 onClick={start}
+                disabled={!account.ready}
                 className="rounded-full bg-cp-ink px-8 py-3.5 text-base font-bold text-cp-ink-inverse shadow-lg transition-transform hover:-translate-y-0.5 active:translate-y-0"
               >
                 Start a circle
@@ -711,6 +713,7 @@ export default function AboutPage() {
               <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                 <button
                   onClick={start}
+                  disabled={!account.ready}
                   className="rounded-full bg-cp-ink px-8 py-3.5 font-bold text-cp-ink-inverse shadow-lg transition-transform hover:-translate-y-0.5"
                 >
                   Start a circle

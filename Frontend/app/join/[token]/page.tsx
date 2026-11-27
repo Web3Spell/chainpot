@@ -6,6 +6,7 @@ import { LinkIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Navbar } from '@/components/dashboard/navbar';
 import { useTheme } from '@/providers/theme-provider';
+import { AccountAccessButton } from '@/components/aa/account-access-button';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { apiFetch } from '@/lib/aa/api';
 import { useDraftByToken, useMyDrafts, type Draft } from '@/hooks/useDrafts';
@@ -52,7 +53,7 @@ export default function JoinPage() {
   } else if (full) {
     action = <p className="font-bold text-cp-muted">This circle is full.</p>;
   } else if (!account.isConnected) {
-    action = <Button size="lg" onClick={account.login}>Sign in to accept</Button>;
+    action = <AccountAccessButton size="lg">Sign in to accept</AccountAccessButton>;
   } else if (!account.getIdentityToken) {
     action = <p className="font-bold text-cp-muted">Sign in with your phone number or email to accept this invite.</p>;
   } else {

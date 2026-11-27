@@ -1,12 +1,13 @@
 'use client';
 
 import { Users } from 'lucide-react';
+import { AccountAccessButton } from '@/components/aa/account-access-button';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { useMyPotIds } from '@/hooks/useMyPotIds';
 import { usePotNames } from '@/hooks/usePotNames';
 import { Card, Skeleton } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
-import { ButtonLink, Button } from '@/components/ui/button';
+import { ButtonLink } from '@/components/ui/button';
 import { CircleCard } from './circle-card';
 import { DraftCard } from './draft-card';
 import { useMyDrafts } from '@/hooks/useDrafts';
@@ -25,9 +26,9 @@ export function MyCircles() {
       <Card>
         <EmptyState
           icon={Users}
-          title="Sign in to see your circles"
+          title={account.access === "signed-out" ? "Sign in to see your circles" : "Access your circles"}
           body="Your circles, what's due and what you've received show up here."
-          action={<Button onClick={account.login}>Sign in</Button>}
+          action={<AccountAccessButton />}
         />
       </Card>
     );

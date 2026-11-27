@@ -30,7 +30,8 @@ export default function Home() {
 
   const handleGetStarted = () => {
     setWantsDashboard(true);
-    if (!account.isConnected) account.login();
+    if (account.access === 'signed-out') account.login();
+    if (account.access === 'reconnect' || account.access === 'wallet-unavailable') router.push('/dashboard');
   };
 
   // Animation variants
@@ -235,6 +236,7 @@ export default function Home() {
                 whileHover="hover"
                 whileTap="tap"
                 onClick={handleGetStarted}
+                disabled={!account.ready}
                 className="px-10 py-3 rounded-full bg-white text-black font-semibold text-base shadow-lg hover:shadow-2xl transition-shadow duration-300"
               >
                 Get Started

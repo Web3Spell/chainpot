@@ -33,6 +33,7 @@ export interface ChainPotAccount {
   mode: 'smart' | 'eoa';
   ready: boolean;
   isConnected: boolean;
+  access: ReturnType<typeof import('./session').accountAccess>;
   address?: `0x${string}`;
   /** Email or phone the user signed in with (smart mode only). */
   label?: string;
@@ -41,6 +42,7 @@ export interface ChainPotAccount {
   /** Passkey / Face ID is required to sign (smart mode, once enrolled). */
   passkeyProtected: boolean;
   login: () => void;
+  reconnectWallet?: () => void;
   logout: () => void;
   /** Phone / email Privy has verified for this user (smart mode). */
   contacts?: { email?: string; phone?: string };
@@ -97,6 +99,7 @@ export function WalletAccountBridge({ children }: { children: React.ReactNode })
       mode: 'eoa',
       ready: status !== 'reconnecting' && status !== 'connecting',
       isConnected,
+      access: isConnected ? 'connected' : status === 'disconnected' ? 'signed-out' : 'loading',
       address,
       sponsored: false,
       passkeyProtected: false,

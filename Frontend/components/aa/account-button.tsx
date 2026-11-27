@@ -5,6 +5,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { PRIVY_APP_ID } from '@/config/wagmi';
 import { useChainPotAccount } from '@/lib/aa/account';
 import { shortAddress } from '@/lib/pot';
+import { AccountAccessButton } from './account-access-button';
 
 /**
  * Sign-in control. With Privy it's "Sign in" → phone/email/Google/Apple/passkey, and a small menu
@@ -30,13 +31,11 @@ function PrivyAccountButton({ isDarkMode }: { isDarkMode?: boolean }) {
   }, [open]);
 
   const solid = isDarkMode ? 'bg-white text-black' : 'bg-black text-white';
-  if (!account.ready) return <span className={`px-5 py-2 rounded-full text-sm font-bold opacity-50 ${solid}`}>…</span>;
-  if (!account.isConnected) {
-    return (
-      <button onClick={account.login} className={`px-5 py-2 rounded-full text-sm font-bold ${solid}`}>
-        Sign in
-      </button>
-    );
+  if (account.access === 'loading') {
+    return <span role="status" className={`px-5 py-2 rounded-full text-sm font-bold opacity-50 ${solid}`}>Restoring…</span>;
+  }
+  if (account.access === 'signed-out') {
+    return <AccountAccessButton className={solid} />;
   }
 
   const copy = async () => {
@@ -54,17 +53,22 @@ function PrivyAccountButton({ isDarkMode }: { isDarkMode?: boolean }) {
     <div className="relative" ref={ref}>
       <button onClick={() => setOpen((o) => !o)} className={`px-4 py-2 rounded-full text-sm font-bold flex items-center gap-2 max-w-[32vw] sm:max-w-none min-w-0 shrink ${solid}`} aria-haspopup="menu" aria-expanded={open}>
         <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-        <span className="truncate">{account.label ?? shortAddress(account.address)}</span>
+        <span className="truncate">{account.label ?? (account.address ? shortAddress(account.address) : 'Signed in')}</span>
       </button>
       {open && (
         <div role="menu" className="absolute right-0 mt-2 w-72 rounded-2xl bg-white text-black shadow-2xl border border-black/10 p-2 z-50">
           <div className="px-3 py-2 text-xs text-gray-500">
-            {account.mode === 'smart' ? 'Your ChainPot account' : 'Connected wallet'}
-            <div className="font-mono text-black text-[11px] break-all mt-1">{account.address}</div>
+            {account.address ? (account.mode === 'smart' ? 'Your ChainPot account' : 'Connected wallet') : 'Signed in. Wallet unavailable.'}
+            {account.address && <div className="font-mono text-black text-[11px] break-all mt-1">{account.address}</div>}
           </div>
-          <button role="menuitem" onClick={copy} className="w-full text-left px-3 py-2 rounded-xl hover:bg-black/5 text-sm font-medium">
+          {account.reconnectWallet && (
+            <button role="menuitem" onClick={() => { setOpen(false); account.reconnectWallet?.(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-black/5 text-sm font-medium">
+              Reconnect wallet
+            </button>
+          )}
+          {account.address && <button role="menuitem" onClick={copy} className="w-full text-left px-3 py-2 rounded-xl hover:bg-black/5 text-sm font-medium">
             {copied ? 'Copied ✓' : 'Copy account address (to receive USDC)'}
-          </button>
+          </button>}
           {account.enrollPasskey && (
             <button role="menuitem" onClick={() => { setOpen(false); account.enrollPasskey?.(); }} className="w-full text-left px-3 py-2 rounded-xl hover:bg-black/5 text-sm font-medium">
               {account.passkeyProtected ? '✓ Protected with Face ID / passkey' : 'Protect payments with Face ID / passkey'}
